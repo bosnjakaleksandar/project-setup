@@ -1,6 +1,6 @@
 # Project Setup CLI
 
-A Command Line Interface tool for automatically scaffolding projects. It supports **Next.js**, **React**, **WordPress Theme**, and **WordPress + WooCommerce** installations, while automatically generating the required local development environment config for **Docker** or **Lando**.
+A Command Line Interface tool for automatically scaffolding projects. It supports **Next.js**, **React**, **WordPress**, **WordPress + WooCommerce**, **WordPress + React** installations, while automatically generating the required local development environment config for **Docker** or **Lando**.
 
 ## 📌 Prerequisites
 
