@@ -7,7 +7,6 @@ import { execSync } from 'child_process';
 
 export default class WordPressStrategy extends BaseStrategy {
   async askQuestions(ctx) {
-    const { projectType } = ctx;
 
     const mysqlVersion = await select({
       message: "Choose MySQL version:",
@@ -24,8 +23,8 @@ export default class WordPressStrategy extends BaseStrategy {
     });
 
     const themeRepo = await input({
-      message: "Git template URL to clone as the theme (leave empty for popart starter theme):",
-      default: projectType === "wp-theme" ? "git@github.com:popart-studio/popart-tema.git" : "",
+      message: "Git template URL to clone as the theme (defaults to popart starter theme):",
+      default: "git@github.com:popart-studio/popart-tema.git",
     });
 
     return { ...ctx, mysqlVersion, wpVersion, themeRepo };
@@ -37,9 +36,16 @@ export default class WordPressStrategy extends BaseStrategy {
     await fs.ensureDir(themeDir);
 
     if (themeRepo) {
-      console.log(chalk.cyan(`\nCloning theme from ${themeRepo}...`));
+      let branchFlag = '';
+      if (projectType === 'wp-woo') {
+        branchFlag = '-b woocommerce ';
+      } else if (projectType === 'wp-react') {
+        branchFlag = '-b react ';
+      }
+
+      console.log(chalk.cyan(`\nCloning theme from ${themeRepo}${branchFlag ? ` (${branchFlag.trim()})` : ''}...`));
       try {
-        execSync(`git clone ${themeRepo} .`, {
+        execSync(`git clone ${branchFlag}${themeRepo} .`, {
           stdio: "inherit",
           cwd: themeDir,
         });
@@ -49,20 +55,19 @@ export default class WordPressStrategy extends BaseStrategy {
         console.log(chalk.red(`\nFailed to clone repo.`));
       }
     } else {
-      const isWoo = projectType === "wp-woo";
-      const wooTags = isWoo ? "\\n * Tags: woocommerce" : "";
-
       await fs.writeFile(
         path.join(themeDir, "style.css"),
-        `/*\n * Theme Name: ${projectName}\n * Author: Starter CLI${wooTags}\n */\n`
+        `/*\n * Theme Name: ${projectName}\n * Author: Starter CLI\n */\n`
       );
+
       await fs.writeFile(
         path.join(themeDir, "index.php"),
         `<?php\n// The main template file\nget_header();\n?>\n<h1>Welcome to ${projectName}</h1>\n<?php\nget_footer();\n`
       );
+
       await fs.writeFile(
         path.join(themeDir, "functions.php"),
-        `<?php\n// Theme functions\n${isWoo ? "add_action( 'after_setup_theme', function() { add_theme_support( 'woocommerce' ); } );\n" : ""}`
+        `<?php\n// Theme functions\n`
       );
     }
 

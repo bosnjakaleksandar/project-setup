@@ -44,10 +44,11 @@ An interactive menu will guide you through:
 
 1. **What is the name of your project?** - Folder and project name (lowercase, numbers, dashes only).
 2. **Which type of project do you want to create?**
-   - *Next.js Theme* - Scaffolds a modern Next.js application.
-   - *React Theme* - Scaffolds a classic React SPA.
-   - *WordPress Theme* - Generates basic WP files (or prompts for a Git repo URL to clone). Defaults to pulling the SSH template [Popart Theme](git@github.com:popart-studio/popart-tema.git).
-   - *WordPress + WooCommerce* - Same as above, but with WooCommerce tags and scripts. Default theme clone is intentionally omitted.
+   - *Next.js* - Scaffolds a modern Next.js application.
+   - *React* - Scaffolds a classic React SPA.
+   - *WordPress* - Defaults to pulling the boilerplate SSH template `git@github.com:popart-studio/popart-tema.git` on the default branch. Alternatively, if no repo is provided, it manually generates base WordPress files (`index.php`, `style.css`...).
+   - *WordPress + WooCommerce* - Operates identically, but automatically checks out the `woocommerce` branch of the chosen repository (or injects WooCommerce support to manual files).
+   - *WordPress + React* - Operates identically, but automatically checks out the `react` branch of the chosen repository (or injects standard `@wordpress/scripts` scaffolding manually).
 3. **Which local environment do you prefer?** - Generates either a `docker-compose.yml` or a `.lando.yml`.
 4. **Choose MySQL version & WordPress version** *(WP Only)*
 5. **Git template URL** *(WP Only)* - Leave empty for standard boilerplate files, or enter an SSH/HTTPS Git URL.

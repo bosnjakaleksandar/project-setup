@@ -8,6 +8,7 @@ import ora from "ora";
 import NextjsStrategy from "./strategies/NextjsStrategy.js";
 import ReactStrategy from "./strategies/ReactStrategy.js";
 import WordPressStrategy from "./strategies/WordPressStrategy.js";
+import LaravelStrategy from "./strategies/LaravelStrategy.js";
 
 async function run() {
   console.log(chalk.bold.cyan("\n🚀 Welcome to the Project Setup CLI!\n"));
@@ -23,34 +24,49 @@ async function run() {
     },
   });
 
-  const projectType = await select({
-    message: "Which type of project do you want to create?",
+  const appType = await select({
+    message: "Are you building an Application or a WordPress project?",
     choices: [
-      {
-        name: "Next.js",
-        value: "nextjs",
-        description: "A Next.js starter",
-      },
-      { name: "React", value: "react", description: "A React starter" },
-      {
-        name: "WordPress",
-        value: "wp-theme",
-        description: "A WordPress starter with custom theme",
-      },
-      {
-        name: "WordPress + WooCommerce",
-        value: "wp-woo",
-        description:
-          "A WordPress starter with custom theme and WooCommerce support",
-      },
-      {
-        name: "WordPress + React",
-        value: "wp-react",
-        description:
-          "A WordPress starter with custom theme and React support",
-      },
+      { name: "Application", value: "application" },
+      { name: "WordPress", value: "wordpress" },
     ],
   });
+
+  let framework = null;
+  let useLaravel = false;
+  let wpType = null;
+  let projectType = null;
+
+  if (appType === "application") {
+    framework = await select({
+      message: "Which frontend framework do you want to use?",
+      choices: [
+        { name: "React (Vite)", value: "react" },
+        { name: "Next.js", value: "nextjs" },
+      ],
+    });
+    
+    useLaravel = await select({
+      message: "Do you want to add Laravel as a backend API?",
+      choices: [
+        { name: "Yes", value: true },
+        { name: "No", value: false },
+      ],
+    });
+    
+    projectType = framework;
+  } else {
+    wpType = await select({
+      message: "Which WordPress project setup do you need?",
+      choices: [
+        { name: "Standard Theme", value: "wp-theme" },
+        { name: "WordPress + WooCommerce", value: "wp-woo" },
+        { name: "WordPress + React", value: "wp-react" },
+      ],
+    });
+    
+    projectType = wpType;
+  }
 
   const environment = await select({
     message: "Which local environment do you prefer?",
@@ -63,24 +79,23 @@ async function run() {
   let ctx = {
     projectName,
     projectType,
+    appType,
+    framework,
+    useLaravel,
+    wpType,
     environment,
   };
 
   let strategy;
-  switch (projectType) {
-    case "nextjs":
-      strategy = new NextjsStrategy();
-      break;
-    case "react":
-      strategy = new ReactStrategy();
-      break;
-    case "wp-theme":
-    case "wp-woo":
-      strategy = new WordPressStrategy();
-      break;
-    default:
-      console.log(chalk.red("Unknown project type selected."));
-      process.exit(1);
+  if (appType === "application") {
+    const frontendStrategy = framework === "nextjs" ? new NextjsStrategy() : new ReactStrategy();
+    if (useLaravel) {
+      strategy = new LaravelStrategy(frontendStrategy);
+    } else {
+      strategy = frontendStrategy;
+    }
+  } else {
+    strategy = new WordPressStrategy();
   }
 
   ctx = await strategy.askQuestions(ctx);
