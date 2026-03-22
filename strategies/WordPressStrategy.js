@@ -1,5 +1,5 @@
 import BaseStrategy from './BaseStrategy.js';
-import { input, select } from '@inquirer/prompts';
+import { text, select, isCancel, cancel } from '@clack/prompts';
 import chalk from 'chalk';
 import fs from 'fs-extra';
 import path from 'path';
@@ -10,22 +10,25 @@ export default class WordPressStrategy extends BaseStrategy {
 
     const mysqlVersion = await select({
       message: "Choose MySQL version:",
-      choices: [
-        { name: "8.0 (Recommended)", value: "8.0" },
-        { name: "5.7", value: "5.7" },
-        { name: "MariaDB 10.4", value: "mariadb:10.4" },
+      options: [
+        { label: "8.0 (Recommended)", value: "8.0" },
+        { label: "5.7", value: "5.7" },
+        { label: "MariaDB 10.4", value: "mariadb:10.4" },
       ],
     });
+    if (isCancel(mysqlVersion)) { cancel("Operation cancelled."); process.exit(0); }
 
-    const wpVersion = await input({
-      message: 'WordPress version (leave empty for latest or specify version like "6.9.4"):',
-      default: "latest",
+    const wpVersion = await text({
+      message: 'WordPress version (latest or specify version like "6.9.4"):', 
+      initialValue: "latest",
     });
+    if (isCancel(wpVersion)) { cancel("Operation cancelled."); process.exit(0); }
 
-    const themeRepo = await input({
+    const themeRepo = await text({
       message: "Git template URL to clone as the theme (defaults to popart starter theme):",
-      default: "git@github.com:popart-studio/popart-tema.git",
+      initialValue: "git@github.com:popart-studio/popart-tema.git",
     });
+    if (isCancel(themeRepo)) { cancel("Operation cancelled."); process.exit(0); }
 
     return { ...ctx, mysqlVersion, wpVersion, themeRepo };
   }
