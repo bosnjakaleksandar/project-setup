@@ -18,6 +18,7 @@ import NextjsStrategy from "./strategies/NextjsStrategy.js";
 import ReactStrategy from "./strategies/ReactStrategy.js";
 import WordPressStrategy from "./strategies/WordPressStrategy.js";
 import LaravelStrategy from "./strategies/LaravelStrategy.js";
+import ExistingWPStrategy from "./strategies/ExistingWPStrategy.js";
 import { createProjectPost } from "./utils/wpApi.js";
 
 async function run() {
@@ -51,6 +52,15 @@ async function run() {
 
   intro(chalk.bgCyan(chalk.black(" 🚀 CLI START ")));
 
+  const setupType = await select({
+    message: "What would you like to do?",
+    options: [
+      { label: "Create a new project", value: "new" },
+      { label: "Set up an existing WP project", value: "existing-wp" },
+    ],
+  });
+  if (isCancel(setupType)) { cancel("Operation cancelled."); process.exit(0); }
+
   const projectName = await text({
     message: "What is the name of your project?",
     initialValue: "project-name",
@@ -63,49 +73,55 @@ async function run() {
   });
   if (isCancel(projectName)) { cancel("Operation cancelled."); process.exit(0); }
 
-  const appType = await select({
-    message: "Are you building an Application or a WordPress project?",
-    options: [
-      { label: "Application", value: "application" },
-      { label: "WordPress", value: "wordpress" },
-    ],
-  });
-  if (isCancel(appType)) { cancel("Operation cancelled."); process.exit(0); }
-
+  let appType = null;
   let framework = null;
   let useLaravel = false;
   let wpType = null;
   let projectType = null;
 
-  if (appType === "application") {
-    framework = await select({
-      message: "Which frontend framework do you want to use?",
+  if (setupType === "new") {
+    appType = await select({
+      message: "Are you building an Application or a WordPress project?",
       options: [
-        { label: "React (Vite)", value: "react" },
-        { label: "Next.js", value: "nextjs" },
+        { label: "Application", value: "application" },
+        { label: "WordPress", value: "wordpress" },
       ],
     });
-    if (isCancel(framework)) { cancel("Operation cancelled."); process.exit(0); }
-    
-    useLaravel = await confirm({
-      message: "Do you want to add Laravel as a backend API?",
-      initialValue: false,
-    });
-    if (isCancel(useLaravel)) { cancel("Operation cancelled."); process.exit(0); }
-    
-    projectType = framework;
+    if (isCancel(appType)) { cancel("Operation cancelled."); process.exit(0); }
+
+    if (appType === "application") {
+      framework = await select({
+        message: "Which frontend framework do you want to use?",
+        options: [
+          { label: "React (Vite)", value: "react" },
+          { label: "Next.js", value: "nextjs" },
+        ],
+      });
+      if (isCancel(framework)) { cancel("Operation cancelled."); process.exit(0); }
+      
+      useLaravel = await confirm({
+        message: "Do you want to add Laravel as a backend API?",
+        initialValue: false,
+      });
+      if (isCancel(useLaravel)) { cancel("Operation cancelled."); process.exit(0); }
+      
+      projectType = framework;
+    } else {
+      wpType = await select({
+        message: "Which WordPress project setup do you need?",
+        options: [
+          { label: "Standard Theme", value: "wp-theme" },
+          { label: "WordPress + WooCommerce", value: "wp-woo" },
+          { label: "WordPress + React", value: "wp-react" },
+        ],
+      });
+      if (isCancel(wpType)) { cancel("Operation cancelled."); process.exit(0); }
+      
+      projectType = wpType;
+    }
   } else {
-    wpType = await select({
-      message: "Which WordPress project setup do you need?",
-      options: [
-        { label: "Standard Theme", value: "wp-theme" },
-        { label: "WordPress + WooCommerce", value: "wp-woo" },
-        { label: "WordPress + React", value: "wp-react" },
-      ],
-    });
-    if (isCancel(wpType)) { cancel("Operation cancelled."); process.exit(0); }
-    
-    projectType = wpType;
+    appType = "wordpress";
+    projectType = "wp-existing";
   }
 
   const environment = await select({
@@ -118,6 +134,7 @@ async function run() {
   if (isCancel(environment)) { cancel("Operation cancelled."); process.exit(0); }
 
   let ctx = {
+    setupType,
     projectName,
     projectType,
     appType,
@@ -128,7 +145,9 @@ async function run() {
   };
 
   let strategy;
-  if (appType === "application") {
+  if (setupType === "existing-wp") {
+    strategy = new ExistingWPStrategy();
+  } else if (appType === "application") {
     const frontendStrategy = framework === "nextjs" ? new NextjsStrategy() : new ReactStrategy();
     if (useLaravel) {
       strategy = new LaravelStrategy(frontendStrategy);
@@ -171,18 +190,20 @@ async function run() {
       nextSteps += `  npm run dev`;
     }
 
-    const doGitInit = await confirm({
-      message: "Do you want to initialize a new Git repository?",
-      initialValue: true
-    });
-    if (isCancel(doGitInit)) { cancel("Operation cancelled."); process.exit(0); }
+    if (!ctx.skipGitInit) {
+      const doGitInit = await confirm({
+        message: "Do you want to initialize a new Git repository?",
+        initialValue: true
+      });
+      if (isCancel(doGitInit)) { cancel("Operation cancelled."); process.exit(0); }
 
-    if (doGitInit) {
-      try {
-        execSync("git init", { cwd: targetDir, stdio: "ignore" });
-        console.log(chalk.gray("│  Initialized empty Git repository."));
-      } catch (err) {
-        console.log(chalk.red("│  Failed to initialize git."));
+      if (doGitInit) {
+        try {
+          execSync("git init", { cwd: targetDir, stdio: "ignore" });
+          console.log(chalk.gray("│  Initialized empty Git repository."));
+        } catch (err) {
+          console.log(chalk.red("│  Failed to initialize git."));
+        }
       }
     }
 
@@ -195,7 +216,7 @@ async function run() {
     if (sendToWp) {
       const repoUrl = await text({ 
         message: "What is the Github Repository URL (SSH or HTTP)?",
-        initialValue: "" 
+        initialValue: ctx.stagingRepoUrl || "" 
       });
       if (isCancel(repoUrl)) { cancel("Operation cancelled."); process.exit(0); }
       

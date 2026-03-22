@@ -1,34 +1,43 @@
-import BaseStrategy from './BaseStrategy.js';
-import { text, select, isCancel, cancel } from '@clack/prompts';
-import chalk from 'chalk';
-import fs from 'fs-extra';
-import path from 'path';
-import { execSync } from 'child_process';
+import BaseStrategy from "./BaseStrategy.js";
+import { text, select, isCancel, cancel } from "@clack/prompts";
+import chalk from "chalk";
+import fs from "fs-extra";
+import path from "path";
+import { execSync } from "child_process";
 
 export default class WordPressStrategy extends BaseStrategy {
   async askQuestions(ctx) {
-
     const mysqlVersion = await select({
       message: "Choose MySQL version:",
       options: [
         { label: "8.0 (Recommended)", value: "8.0" },
         { label: "5.7", value: "5.7" },
-        { label: "MariaDB 10.4", value: "mariadb:10.4" },
+        { label: "MariaDB 11.4", value: "mariadb:11.4" },
       ],
     });
-    if (isCancel(mysqlVersion)) { cancel("Operation cancelled."); process.exit(0); }
+    if (isCancel(mysqlVersion)) {
+      cancel("Operation cancelled.");
+      process.exit(0);
+    }
 
     const wpVersion = await text({
-      message: 'WordPress version (latest or specify version like "6.9.4"):', 
+      message: 'WordPress version (latest or specify version like "6.9.4"):',
       initialValue: "latest",
     });
-    if (isCancel(wpVersion)) { cancel("Operation cancelled."); process.exit(0); }
+    if (isCancel(wpVersion)) {
+      cancel("Operation cancelled.");
+      process.exit(0);
+    }
 
     const themeRepo = await text({
-      message: "Git template URL to clone as the theme (defaults to popart starter theme):",
+      message:
+        "Git template URL to clone as the theme (defaults to popart starter theme):",
       initialValue: "git@github.com:popart-studio/popart-tema.git",
     });
-    if (isCancel(themeRepo)) { cancel("Operation cancelled."); process.exit(0); }
+    if (isCancel(themeRepo)) {
+      cancel("Operation cancelled.");
+      process.exit(0);
+    }
 
     return { ...ctx, mysqlVersion, wpVersion, themeRepo };
   }
@@ -39,38 +48,44 @@ export default class WordPressStrategy extends BaseStrategy {
     await fs.ensureDir(themeDir);
 
     if (themeRepo) {
-      let branchFlag = '';
-      if (projectType === 'wp-woo') {
-        branchFlag = '-b woocommerce ';
-      } else if (projectType === 'wp-react') {
-        branchFlag = '-b react ';
+      let branchFlag = "";
+      if (projectType === "wp-woo") {
+        branchFlag = "-b woocommerce ";
+      } else if (projectType === "wp-react") {
+        branchFlag = "-b react ";
       }
 
-      console.log(chalk.cyan(`\nCloning theme from ${themeRepo}${branchFlag ? ` (${branchFlag.trim()})` : ''}...`));
+      console.log(
+        chalk.cyan(
+          `\nCloning theme from ${themeRepo}${branchFlag ? ` (${branchFlag.trim()})` : ""}...`,
+        ),
+      );
       try {
         execSync(`git clone ${branchFlag}${themeRepo} .`, {
           stdio: "inherit",
           cwd: themeDir,
         });
         await fs.remove(path.join(themeDir, ".git"));
-        console.log(chalk.green(`Removed .git tracking from the cloned starter theme.`));
+        console.log(
+          chalk.green(`Removed .git tracking from the cloned starter theme.`),
+        );
       } catch (e) {
         console.log(chalk.red(`\nFailed to clone repo.`));
       }
     } else {
       await fs.writeFile(
         path.join(themeDir, "style.css"),
-        `/*\n * Theme Name: ${projectName}\n * Author: Starter CLI\n */\n`
+        `/*\n * Theme Name: ${projectName}\n * Author: Starter CLI\n */\n`,
       );
 
       await fs.writeFile(
         path.join(themeDir, "index.php"),
-        `<?php\n// The main template file\nget_header();\n?>\n<h1>Welcome to ${projectName}</h1>\n<?php\nget_footer();\n`
+        `<?php\n// The main template file\nget_header();\n?>\n<h1>Welcome to ${projectName}</h1>\n<?php\nget_footer();\n`,
       );
 
       await fs.writeFile(
         path.join(themeDir, "functions.php"),
-        `<?php\n// Theme functions\n`
+        `<?php\n// Theme functions\n`,
       );
     }
 
@@ -148,7 +163,7 @@ php.ini
       const dockerComposeContent = `
 services:
   db:
-    image: mysql:${mysqlVersion}
+    image: ${mysqlVersion.includes("mariadb") ? mysqlVersion : `mysql:${mysqlVersion}`}
     volumes:
       - db_data:/var/lib/mysql
     restart: always
@@ -191,7 +206,7 @@ volumes:
 `;
       await fs.writeFile(
         path.join(targetDir, "docker-compose.yaml"),
-        dockerComposeContent
+        dockerComposeContent,
       );
     } else if (environment === "lando") {
       const landoContent = `name: ${projectName}
@@ -199,7 +214,7 @@ recipe: wordpress
 config:
   webroot: .
   php: 8.3
-  database: ${mysqlVersion.includes("mariadb") ? "mariadb:10.4" : `mysql:${mysqlVersion}`}
+  database: ${mysqlVersion.includes("mariadb") ? mysqlVersion : `mysql:${mysqlVersion}`}
 services:
   appserver:
     ssl: true
