@@ -55,7 +55,7 @@ An interactive menu will guide you through:
      * **Do you want to add Laravel as the backend?** - Choose 'Yes' to scaffold a full-stack environment alongside your frontend.
    * **WordPress**
      * **Type of WordPress project:**
-       -  **Standard Theme** - Pulls the boilerplate SSH template `git@github.com:popart-studio/popart-tema.git` on the default branch.
+       - **Standard Theme** - Pulls the boilerplate SSH template `git@github.com:popart-studio/popart-tema.git` on the default branch.
        - **WordPress + WooCommerce** - Automatically checks out the `woocommerce` branch of the chosen repository.
        - **WordPress + React** - Automatically checks out the `react` branch of the chosen repository.  
      * **Choose MySQL version & WordPress version.**
