@@ -8,32 +8,31 @@
  * @param {string} options.stagingUrl - The Staging URL of the new project
  * @param {string} options.developerName - The developer who created the project
  */
-export async function createProjectPost({ wpSiteUrl, developerName, projectName, repoUrl, stagingUrl }) {
-
-  const content = `
-    <!-- wp:paragraph -->
-    <p><strong>Developer:</strong> ${developerName}</p>
-    <!-- /wp:paragraph -->
-    <!-- wp:paragraph -->
-    <p><strong>Repository URL:</strong> <a href="${repoUrl}">${repoUrl}</a></p>
-    <!-- /wp:paragraph -->
-    <!-- wp:paragraph -->
-    <p><strong>Staging URL:</strong> <a href="${stagingUrl}">${stagingUrl}</a></p>
-    <!-- /wp:paragraph -->
-  `;
+export async function createProjectPost({ wpSiteUrl, developerName, projectName, repoUrl, stagingUrl, basicAuthUser, basicAuthPass }) {
 
   // Endpoint
   const apiUrl = `${wpSiteUrl.replace(/\/$/, '')}/wp-json/baza-znanja/v1/projects`;
 
+  const headers = {
+    'Content-Type': 'application/json',
+  };
+
+  if (basicAuthUser && basicAuthPass) {
+    const encodedCredentials = Buffer.from(`${basicAuthUser}:${basicAuthPass}`).toString('base64');
+    headers['Authorization'] = `Basic ${encodedCredentials}`;
+  }
+
   const response = await fetch(apiUrl, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: headers,
     body: JSON.stringify({
       title: projectName,
-      content: content,
-      status: 'publish'
+      status: 'publish',
+      acf: {
+        developer: developerName,
+        repo_url: repoUrl,
+        staging_url: stagingUrl
+      }
     })
   });
 

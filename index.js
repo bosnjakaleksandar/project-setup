@@ -4,6 +4,14 @@ import chalk from "chalk";
 import fs from "fs-extra";
 import path from "path";
 import ora from "ora";
+import { execSync } from "child_process";
+
+import { fileURLToPath } from "url";
+import * as dotenv from "dotenv";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+dotenv.config({ path: path.join(__dirname, ".env") });
 
 import NextjsStrategy from "./strategies/NextjsStrategy.js";
 import ReactStrategy from "./strategies/ReactStrategy.js";
@@ -194,6 +202,9 @@ async function run() {
           message: "Enter the Base URL of the Knowledge Base:"
         });
       }
+
+      let basicAuthUser = process.env.WP_BASIC_AUTH_USER || "";
+      let basicAuthPass = process.env.WP_BASIC_AUTH_PASS || "";
       
       const spinnerWp = ora("Registering project on Knowledge Base...").start();
       try {
@@ -202,7 +213,9 @@ async function run() {
           developerName,
           projectName,
           repoUrl,
-          stagingUrl
+          stagingUrl,
+          basicAuthUser,
+          basicAuthPass
         });
         spinnerWp.succeed(chalk.green(`Project registered! Post ID: ${post.id}`));
       } catch(err) {
