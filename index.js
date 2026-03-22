@@ -9,6 +9,7 @@ import NextjsStrategy from "./strategies/NextjsStrategy.js";
 import ReactStrategy from "./strategies/ReactStrategy.js";
 import WordPressStrategy from "./strategies/WordPressStrategy.js";
 import LaravelStrategy from "./strategies/LaravelStrategy.js";
+import { createProjectPost } from "./utils/wpApi.js";
 
 async function run() {
   console.log(chalk.bold.cyan("\n🚀 Welcome to the Project Setup CLI!\n"));
@@ -137,6 +138,79 @@ async function run() {
     }
 
     console.log("\n");
+
+    const doGitInit = await select({
+      message: "Do you want to initialize a new Git repository?",
+      choices: [{ name: "Yes", value: true }, { name: "No", value: false }]
+    });
+
+    if (doGitInit) {
+      try {
+        execSync("git init", { cwd: targetDir, stdio: "ignore" });
+        console.log(chalk.green("Initialized empty Git repository.\n"));
+      } catch (err) {
+        console.log(chalk.red("Failed to initialize git.\n"));
+      }
+    }
+
+    const sendToWp = await select({
+      message: "Do you want to register this project on the Knowledge Base (Baza Znanja)?",
+      choices: [{ name: "Yes", value: true }, { name: "No", value: false }]
+    });
+
+    if (sendToWp) {
+      const repoUrl = await input({ 
+        message: "What is the Github Repository URL (SSH or HTTP)?",
+        default: "" 
+      });
+      
+      const stagingUrl = await input({ 
+        message: "What is the Staging URL?",
+        default: `https://${projectName}.popart.cloud`
+      });
+
+      let defaultDevName = 'Unknown Developer';
+      try {
+        defaultDevName = execSync('git config user.name').toString().trim();
+      } catch (e) {}
+
+      const developerName = await input({
+        message: "Developer Name:",
+        default: defaultDevName
+      });
+
+      const envChoice = await select({
+        message: "Where is the Knowledge Base running?",
+        choices: [
+          { name: "Local (http://localhost:8000)", value: "http://localhost:8000" },
+          { name: "Staging (https://baza-znanja.popart.cloud)", value: "https://baza-znanja.popart.cloud" },
+          { name: "Custom URL", value: "custom" }
+        ]
+      });
+
+      let wpSiteUrl = envChoice;
+      if (envChoice === "custom") {
+        wpSiteUrl = await input({
+          message: "Enter the Base URL of the Knowledge Base:"
+        });
+      }
+      
+      const spinnerWp = ora("Registering project on Knowledge Base...").start();
+      try {
+        const post = await createProjectPost({
+          wpSiteUrl,
+          developerName,
+          projectName,
+          repoUrl,
+          stagingUrl
+        });
+        spinnerWp.succeed(chalk.green(`Project registered! Post ID: ${post.id}`));
+      } catch(err) {
+        spinnerWp.fail(chalk.red("Failed to register project on Knowledge Base."));
+        console.error(err.message);
+      }
+    }
+
   } catch (error) {
     spinner.fail(chalk.red("An error occurred during scaffolding."));
     console.error(error);
