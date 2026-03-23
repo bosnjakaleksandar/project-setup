@@ -9,13 +9,13 @@ Before running this tool, you must have the following installed on your machine:
 1. **Node.js and npm** (v18 or newer recommended) - [Download here](https://nodejs.org/en)
 2. **Docker** or **Lando** (Depending on which environment you choose for local development)
 
-## 🚀 Installation (Windows, Mac, Linux)
+## 🚀 Installation (Mac, Linux)
 
 This CLI tool is designed to be installed globally on your machine so you can scaffold projects from **any directory**. The installation process is identical across operating systems.
 
 ### Step 1: Navigate to the CLI source directory
 
-Open your terminal (`Terminal` on Mac/Linux or `Command Prompt` / `PowerShell` / `Git Bash` on Windows).
+Open your terminal `Terminal` on Mac/Linux.
 Navigate to the directory where this CLI code is located (where `package.json` and `index.js` live).
 
 For example:
@@ -23,8 +23,6 @@ For example:
 ```bash
 cd /path/to/folder/project-setup
 ```
-
-_(On Windows, you might use a path like `cd C:\Users\Name\Projects\project-setup`)_
 
 ### Step 2: Enable the command globally (NPM Link)
 
@@ -53,11 +51,19 @@ You can customize the CLI behavior for your specific organization by creating a 
 
 ## 💻 Usage
 
-Once linked, you no longer need to be inside the tool's directory. Navigate to any empty folder where you want to create a new project and type:
+Once linked, you no longer need to be inside the tool's directory. Navigate to any empty folder where you want to create or clone a project and type:
 
 ```bash
 create-project
 ```
+
+Upon starting, the CLI will ask: **What would you like to do?**
+1. **Create a new project** (See "Scaffolding a New Project")
+2. **Set up an existing WP project** (See "Existing Project Setup")
+
+---
+
+### 🏗️ Scaffolding a New Project
 
 An interactive menu will guide you through:
 
@@ -71,9 +77,34 @@ An interactive menu will guide you through:
        - **Standard Theme** - Pulls the boilerplate SSH template `git@github.com:starter-theme.git` on the default branch.
        - **WordPress + WooCommerce** - Automatically checks out the `woocommerce` branch of the chosen repository.
        - **WordPress + React** - Automatically checks out the `react` branch of the chosen repository.
-     - **Choose MySQL version & WordPress version.**
+     - **Choose MySQL version**
+     - **Choose WordPress version**
      - **Git template URL** - Leave empty for standard boilerplate files, or enter an SSH/HTTPS Git URL.
 3. **Which local environment do you prefer?** - Generates either a `docker-compose.yaml` or a `.lando.yml` configuration for your chosen setup.
+
+---
+
+### 🔄 Existing Project Setup (Clone from Staging)
+
+Use this option to pull an existing WordPress project from a dedicated staging server.
+
+#### 🔑 Prerequisites
+- Ensure the `STAGING_SSH_HOST` variable is set correctly in your `.env` file.
+- You must have SSH access to the staging server.
+- The staging server should have `rsync` and `mariadb-dump` / `mysqldump` available.
+
+#### 🧪 Process:
+1. **Project Name**: Enter the name of the project as it's defined on the staging server (it will be used for the local folder and SSH user).
+2. **Credentials**: Supply the path to your SSH Private Key if not using the default `~/.ssh/id_rsa`.
+3. **Staging URL**: The CLI will suggest a staging URL for search-replace based on `STAGING_SUFFIX`.
+4. **Automated Steps**:
+   - **File Syncing**: Uses `rsync` to pull `wp-content/uploads`, `plugins`, and `themes`.
+   - **Database Migration**: Securely exports the remote database over SSH and downloads it.
+   - **Git Linkage**: Automatically attempts to find and link the remote Git repository from the staging environment.
+   - **Environment Launch**: Starts your chosen environment (Docker/Lando) and imports the data.
+   - **Search-Replace**: Automatically flips URLs from staging to local (e.g., `https://project.staging` to `http://localhost:8080`).
+
+---
 
 ### And then...
 
