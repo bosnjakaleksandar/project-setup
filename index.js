@@ -1,5 +1,14 @@
 #!/usr/bin/env node
-import { text, select, isCancel, cancel, intro, outro, spinner, confirm } from "@clack/prompts";
+import {
+  text,
+  select,
+  isCancel,
+  cancel,
+  intro,
+  outro,
+  spinner,
+  confirm,
+} from "@clack/prompts";
 import chalk from "chalk";
 import fs from "fs-extra";
 import path from "path";
@@ -23,31 +32,31 @@ import { createProjectPost } from "./utils/wpApi.js";
 
 async function run() {
   console.log("");
-  
+
   const asciiArt = figlet.textSync("PROJECT SETUP", {
     font: "Standard",
   });
-  console.log(gradient(['#ffb800', '#ff6a00']).multiline(asciiArt));
-  
+  console.log(gradient(["#ffb800", "#ff6a00"]).multiline(asciiArt));
+
   const frames = [
     `  ╭───────╮  Aca:\n  │ ^ ◡ ^ │  Ready to build something awesome?\n  ╰───────╯`,
     `  ╭───────╮  Aca:\n  │ o ◡ o │  Ready to build something awesome?\n  ╰───────╯`,
     `  ╭───────╮  Aca:\n  │ - ◡ - │  Ready to build something awesome?\n  ╰───────╯`,
-    `  ╭───────╮  Aca:\n  │ > ◡ < │  Ready to build something awesome?\n  ╰───────╯`
+    `  ╭───────╮  Aca:\n  │ > ◡ < │  Ready to build something awesome?\n  ╰───────╯`,
   ];
 
   console.log("");
   console.log(frames[0]);
   let i = 1;
   const interval = setInterval(() => {
-    process.stdout.write('\x1B[3A\x1B[0J'); 
+    process.stdout.write("\x1B[3A\x1B[0J");
     console.log(frames[i % frames.length]);
     i++;
   }, 250);
 
   await new Promise((resolve) => setTimeout(resolve, 2500));
   clearInterval(interval);
-  process.stdout.write('\x1B[3A\x1B[0J'); 
+  process.stdout.write("\x1B[3A\x1B[0J");
   console.log(frames[0] + "\n");
 
   intro(chalk.bgCyan(chalk.black(" 🚀 CLI START ")));
@@ -59,7 +68,10 @@ async function run() {
       { label: "Set up an existing WP project", value: "existing-wp" },
     ],
   });
-  if (isCancel(setupType)) { cancel("Operation cancelled."); process.exit(0); }
+  if (isCancel(setupType)) {
+    cancel("Operation cancelled.");
+    process.exit(0);
+  }
 
   const projectName = await text({
     message: "What is the name of your project?",
@@ -71,7 +83,10 @@ async function run() {
       return;
     },
   });
-  if (isCancel(projectName)) { cancel("Operation cancelled."); process.exit(0); }
+  if (isCancel(projectName)) {
+    cancel("Operation cancelled.");
+    process.exit(0);
+  }
 
   let appType = null;
   let framework = null;
@@ -87,24 +102,33 @@ async function run() {
         { label: "WordPress", value: "wordpress" },
       ],
     });
-    if (isCancel(appType)) { cancel("Operation cancelled."); process.exit(0); }
+    if (isCancel(appType)) {
+      cancel("Operation cancelled.");
+      process.exit(0);
+    }
 
     if (appType === "application") {
       framework = await select({
         message: "Which frontend framework do you want to use?",
         options: [
-          { label: "React (Vite)", value: "react" },
+          { label: "React", value: "react" },
           { label: "Next.js", value: "nextjs" },
         ],
       });
-      if (isCancel(framework)) { cancel("Operation cancelled."); process.exit(0); }
-      
+      if (isCancel(framework)) {
+        cancel("Operation cancelled.");
+        process.exit(0);
+      }
+
       useLaravel = await confirm({
-        message: "Do you want to add Laravel as a backend API?",
+        message: "Do you want to add Laravel as a backend?",
         initialValue: false,
       });
-      if (isCancel(useLaravel)) { cancel("Operation cancelled."); process.exit(0); }
-      
+      if (isCancel(useLaravel)) {
+        cancel("Operation cancelled.");
+        process.exit(0);
+      }
+
       projectType = framework;
     } else {
       wpType = await select({
@@ -115,8 +139,11 @@ async function run() {
           { label: "WordPress + React", value: "wp-react" },
         ],
       });
-      if (isCancel(wpType)) { cancel("Operation cancelled."); process.exit(0); }
-      
+      if (isCancel(wpType)) {
+        cancel("Operation cancelled.");
+        process.exit(0);
+      }
+
       projectType = wpType;
     }
   } else {
@@ -131,7 +158,10 @@ async function run() {
       { label: "Lando (.lando.yml)", value: "lando" },
     ],
   });
-  if (isCancel(environment)) { cancel("Operation cancelled."); process.exit(0); }
+  if (isCancel(environment)) {
+    cancel("Operation cancelled.");
+    process.exit(0);
+  }
 
   let ctx = {
     setupType,
@@ -148,7 +178,8 @@ async function run() {
   if (setupType === "existing-wp") {
     strategy = new ExistingWPStrategy();
   } else if (appType === "application") {
-    const frontendStrategy = framework === "nextjs" ? new NextjsStrategy() : new ReactStrategy();
+    const frontendStrategy =
+      framework === "nextjs" ? new NextjsStrategy() : new ReactStrategy();
     if (useLaravel) {
       strategy = new LaravelStrategy(frontendStrategy);
     } else {
@@ -168,7 +199,11 @@ async function run() {
   try {
     if (await fs.pathExists(targetDir)) {
       s.stop("Directory exists!");
-      cancel(chalk.red(`Directory "${projectName}" already exists! Please choose a different name.`));
+      cancel(
+        chalk.red(
+          `Directory "${projectName}" already exists! Please choose a different name.`,
+        ),
+      );
       process.exit(1);
     }
 
@@ -193,9 +228,12 @@ async function run() {
     if (!ctx.skipGitInit) {
       const doGitInit = await confirm({
         message: "Do you want to initialize a new Git repository?",
-        initialValue: true
+        initialValue: true,
       });
-      if (isCancel(doGitInit)) { cancel("Operation cancelled."); process.exit(0); }
+      if (isCancel(doGitInit)) {
+        cancel("Operation cancelled.");
+        process.exit(0);
+      }
 
       if (doGitInit) {
         try {
@@ -208,56 +246,79 @@ async function run() {
     }
 
     const sendToWp = await confirm({
-      message: "Do you want to register this project on the Knowledge Base (Baza Znanja)?",
-      initialValue: true
+      message:
+        "Do you want to register this project on the Knowledge Base (Baza Znanja)?",
+      initialValue: true,
     });
-    if (isCancel(sendToWp)) { cancel("Operation cancelled."); process.exit(0); }
+    if (isCancel(sendToWp)) {
+      cancel("Operation cancelled.");
+      process.exit(0);
+    }
 
     if (sendToWp) {
-      const repoUrl = await text({ 
+      const repoUrl = await text({
         message: "What is the Github Repository URL (SSH or HTTP)?",
-        initialValue: ctx.stagingRepoUrl || "" 
+        initialValue: ctx.stagingRepoUrl || "",
       });
-      if (isCancel(repoUrl)) { cancel("Operation cancelled."); process.exit(0); }
-      
-      const stagingUrl = await text({ 
-        message: "What is the Staging URL?",
-        initialValue: `https://${projectName}.popart.cloud`
-      });
-      if (isCancel(stagingUrl)) { cancel("Operation cancelled."); process.exit(0); }
+      if (isCancel(repoUrl)) {
+        cancel("Operation cancelled.");
+        process.exit(0);
+      }
 
-      let defaultDevName = 'Unknown Developer';
+      const stagingUrl = await text({
+        message: "What is the Staging URL?",
+        initialValue: `https://${projectName}${process.env.STAGING_SUFFIX || ".staging"}`,
+      });
+      if (isCancel(stagingUrl)) {
+        cancel("Operation cancelled.");
+        process.exit(0);
+      }
+
+      let defaultDevName = "Unknown Developer";
       try {
-        defaultDevName = execSync('git config user.name').toString().trim();
+        defaultDevName = execSync("git config user.name").toString().trim();
       } catch (e) {}
 
       const developerName = await text({
         message: "Developer Name:",
-        initialValue: defaultDevName
+        initialValue: defaultDevName,
       });
-      if (isCancel(developerName)) { cancel("Operation cancelled."); process.exit(0); }
+      if (isCancel(developerName)) {
+        cancel("Operation cancelled.");
+        process.exit(0);
+      }
 
       const envChoice = await select({
         message: "Where is the Knowledge Base running?",
         options: [
-          { label: "Local (http://localhost:8000)", value: "http://localhost:8000" },
-          { label: "Staging (https://baza-znanja.popart.cloud)", value: "https://baza-znanja.popart.cloud" },
-          { label: "Custom URL", value: "custom" }
-        ]
+          {
+            label: `Staging (${process.env.KNOWLEDGE_BASE_URL || "https://knowledge-base.staging"})`,
+            value:
+              process.env.KNOWLEDGE_BASE_URL ||
+              "https://knowledge-base.staging",
+          },
+          { label: "Custom URL", value: "custom" },
+        ],
       });
-      if (isCancel(envChoice)) { cancel("Operation cancelled."); process.exit(0); }
+      if (isCancel(envChoice)) {
+        cancel("Operation cancelled.");
+        process.exit(0);
+      }
 
       let wpSiteUrl = envChoice;
       if (envChoice === "custom") {
         wpSiteUrl = await text({
-          message: "Enter the Base URL of the Knowledge Base:"
+          message: "Enter the Base URL of the Knowledge Base:",
         });
-        if (isCancel(wpSiteUrl)) { cancel("Operation cancelled."); process.exit(0); }
+        if (isCancel(wpSiteUrl)) {
+          cancel("Operation cancelled.");
+          process.exit(0);
+        }
       }
 
       let basicAuthUser = process.env.WP_BASIC_AUTH_USER || "";
       let basicAuthPass = process.env.WP_BASIC_AUTH_PASS || "";
-      
+
       const spinnerWp = spinner();
       spinnerWp.start("Registering project on Knowledge Base...");
       try {
@@ -268,21 +329,21 @@ async function run() {
           repoUrl,
           stagingUrl,
           basicAuthUser,
-          basicAuthPass
+          basicAuthPass,
         });
         spinnerWp.stop(chalk.green(`Project registered! Post ID: ${post.id}`));
-      } catch(err) {
-        spinnerWp.stop(chalk.red("Failed to register project on Knowledge Base."));
+      } catch (err) {
+        spinnerWp.stop(
+          chalk.red("Failed to register project on Knowledge Base."),
+        );
         console.log(chalk.red(`│  ${err.message}`));
       }
     }
 
-    outro(
-      `Next steps:\n${nextSteps}\n\n${chalk.cyan("Happy coding!")}`
-    );
-
+    outro(`Next steps:\n${nextSteps}\n\n${chalk.cyan("Happy coding!")}`);
   } catch (error) {
-    if (typeof s !== 'undefined' && typeof s.stop === 'function') s.stop(chalk.red("An error occurred."));
+    if (typeof s !== "undefined" && typeof s.stop === "function")
+      s.stop(chalk.red("An error occurred."));
     cancel("Setup failed.");
     console.error(error);
     process.exit(1);

@@ -4,6 +4,8 @@ import chalk from "chalk";
 import fs from "fs-extra";
 import path from "path";
 import { execSync } from "child_process";
+import EnvironmentFactory from "../services/EnvironmentFactory.js";
+import GitService from "../services/GitService.js";
 
 export default class WordPressStrategy extends BaseStrategy {
   async askQuestions(ctx) {
@@ -31,8 +33,9 @@ export default class WordPressStrategy extends BaseStrategy {
 
     const themeRepo = await text({
       message:
-        "Git template URL to clone as the theme (defaults to popart starter theme):",
-      initialValue: "git@github.com:popart-studio/popart-tema.git",
+        "Git template URL to clone as the theme (defaults to starter theme from env):",
+      initialValue:
+        process.env.WP_THEME_REPO || "git@github.com:starter-theme.git",
     });
     if (isCancel(themeRepo)) {
       cancel("Operation cancelled.");
@@ -50,9 +53,11 @@ export default class WordPressStrategy extends BaseStrategy {
     if (themeRepo) {
       let branchFlag = "";
       if (projectType === "wp-woo") {
-        branchFlag = "-b woocommerce ";
+        const wooBranch = process.env.WP_WOO_BRANCH || "woocommerce";
+        branchFlag = `-b ${wooBranch} `;
       } else if (projectType === "wp-react") {
-        branchFlag = "-b react ";
+        const reactBranch = process.env.WP_REACT_BRANCH || "react";
+        branchFlag = `-b ${reactBranch} `;
       }
 
       console.log(
@@ -89,180 +94,11 @@ export default class WordPressStrategy extends BaseStrategy {
       );
     }
 
-    const gitignoreContent = `# Wordpress - ignore core, configuration, examples, uploads and logs.
-# https://github.com/github/gitignore/blob/main/WordPress.gitignore
-
-# Core
-#
-# Note: if you want to stage/commit WP core files
-# you can delete this whole section/until Configuration.
-vendor
-node_modules
-/wp-admin/
-/wp-content/index.php
-/wp-content/languages
-/wp-content/plugins/index.php
-/wp-content/themes/index.php
-/wp-includes/
-/index.php
-/license.txt
-/readme.html
-/wp-*.php
-/xmlrpc.php
-
-# Configuration
-wp-config.php
-
-# Example themes
-/wp-content/themes/twenty*/
-
-# Example plugin
-/wp-content/plugins/
-/wp-content/plugins/hello.php
-
-# Uploads
-/wp-content/uploads/
-
-# Log files
-*.log
-
-# htaccess
-/.htaccess
-
-upgrade
-upgrade-temp-backup
-
-/wp-cli
-wp.bat
-
-dist
-# All plugins
-#
-# Note: If you wish to whitelist plugins,
-# uncomment the next line
-#/wp-content/plugins
-
-# All themes
-#
-# Note: If you wish to whitelist themes,
-# uncomment the next line
-#/wp-content/themes
-
-
-*.sql
-*.DS_Store
-php.ini
-`;
-    await fs.writeFile(path.join(targetDir, ".gitignore"), gitignoreContent);
+    await GitService.scaffoldGitignore(targetDir, "wordpress");
   }
 
   async scaffoldEnvironment(targetDir, ctx) {
-    const { projectName, environment, mysqlVersion, wpVersion } = ctx;
-
-    if (environment === "docker") {
-      const dockerComposeContent = `
-services:
-  db:
-    image: ${mysqlVersion.includes("mariadb") ? mysqlVersion : `mysql:${mysqlVersion}`}
-    volumes:
-      - db_data:/var/lib/mysql
-    restart: always
-    environment:
-      MYSQL_ROOT_PASSWORD: password
-      MYSQL_DATABASE: wordpress
-      MYSQL_USER: wp_user
-      MYSQL_PASSWORD: wp_password
-
-  wordpress:
-    depends_on:
-      - db
-    image: wordpress:${wpVersion === "latest" ? "latest" : wpVersion}
-    volumes:
-      - .:/var/www/html
-    ports:
-      - "8080:80"
-    restart: always
-    environment:
-      WORDPRESS_DB_HOST: db
-      WORDPRESS_DB_USER: wp_user
-      WORDPRESS_DB_PASSWORD: wp_password
-      WORDPRESS_DB_NAME: wordpress
-
-  phpmyadmin:
-    image: phpmyadmin:latest
-    platform: linux/amd64
-    depends_on:
-      - db
-    ports:
-      - "8081:80"
-    restart: always
-    environment:
-      PMA_HOST: db
-      PMA_USER: wp_user
-      PMA_PASSWORD: wp_password
-
-volumes:
-  db_data:
-`;
-      await fs.writeFile(
-        path.join(targetDir, "docker-compose.yaml"),
-        dockerComposeContent,
-      );
-    } else if (environment === "lando") {
-      const landoContent = `name: ${projectName}
-recipe: wordpress
-config:
-  webroot: .
-  php: 8.3
-  database: ${mysqlVersion.includes("mariadb") ? mysqlVersion : `mysql:${mysqlVersion}`}
-services:
-  appserver:
-    ssl: true
-    scanner: false
-    overrides:
-      environment:
-        DB_USER: user
-        DB_PASSWORD: user
-        DB_NAME: wordpress
-        DB_HOST: database
-        TABLE_PREFIX: wp_
-    ports:
-      - 5173:5173
-    build_as_root:
-      - curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-      - apt-get install -y nodejs
-    run:
-      - if [ ! -d "wp-content" ] || [ ! -d "wp-includes" ] || [ ! -d "wp-admin" ]; then wp core download; fi
-      - if [ ! -f "wp-config.php" ]; then wp config create --dbname="wordpress" --dbuser="user" --dbpass="user" --dbhost="database" --dbprefix="wp_"; fi
-  database:
-    creds:
-      user: user
-      password: user
-      database: wordpress
-  pma:
-    type: phpmyadmin
-  mail:
-    type: mailhog
-    portforward: true
-    hogfrom:
-      - appserver
-tooling:
-  node:
-    service: appserver
-  npm:
-    service: appserver
-  npx:
-    service: appserver
-proxy:
-  appserver:
-    - ${projectName}.lndo.site
-    - vite.${projectName}.lndo.site:5173
-  pma:
-    - pma.${projectName}.lndo.site
-  mail:
-    - mail.${projectName}.lndo.site
-`;
-      await fs.writeFile(path.join(targetDir, ".lando.yml"), landoContent);
-    }
+    const envService = EnvironmentFactory.getService(ctx.environment);
+    await envService.scaffold(targetDir, "wordpress", ctx);
   }
 }

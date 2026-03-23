@@ -1,6 +1,8 @@
 import BaseStrategy from './BaseStrategy.js';
 import fs from 'fs-extra';
 import path from 'path';
+import EnvironmentFactory from '../services/EnvironmentFactory.js';
+import GitService from '../services/GitService.js';
 
 export default class ReactStrategy extends BaseStrategy {
   async scaffoldSrc(targetDir, ctx) {
@@ -60,32 +62,12 @@ export default class ReactStrategy extends BaseStrategy {
       }
     };
     await fs.writeJSON(path.join(targetDir, "package.json"), reactPkg, { spaces: 2 });
+
+    await GitService.scaffoldGitignore(targetDir, "react");
   }
 
   async scaffoldEnvironment(targetDir, ctx) {
-    const { projectName, environment } = ctx;
-
-    if (environment === "docker") {
-      const dockerComposeContent = `version: '3.8'
-services:
-  app:
-    image: node:18-alpine
-    working_dir: /app
-    volumes:
-      - .:/app
-    ports:
-      - "3000:3000"
-    command: npm run dev
-`;
-      await fs.writeFile(path.join(targetDir, "docker-compose.yaml"), dockerComposeContent);
-    } else if (environment === "lando") {
-      const landoContent = `name: ${projectName}
-recipe: node
-config:
-  node: '18'
-  command: npm run dev
-`;
-      await fs.writeFile(path.join(targetDir, ".lando.yml"), landoContent);
-    }
+    const envService = EnvironmentFactory.getService(ctx.environment);
+    await envService.scaffold(targetDir, "react", ctx);
   }
 }

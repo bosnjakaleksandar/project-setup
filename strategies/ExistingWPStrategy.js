@@ -5,6 +5,8 @@ import fs from "fs-extra";
 import path from "path";
 import { execSync } from "child_process";
 import WordPressStrategy from "./WordPressStrategy.js";
+import EnvironmentFactory from "../services/EnvironmentFactory.js";
+import GitService from "../services/GitService.js";
 
 export default class ExistingWPStrategy extends BaseStrategy {
   async askQuestions(ctx) {
@@ -40,9 +42,10 @@ export default class ExistingWPStrategy extends BaseStrategy {
       process.exit(0);
     }
 
+    const suffix = process.env.STAGING_SUFFIX || ".staging";
     const stagingUrl = await text({
       message: "What is the Staging URL for search-replace?",
-      initialValue: `https://${ctx.projectName}.popart.cloud`,
+      initialValue: `https://${ctx.projectName}${suffix}`,
     });
     if (isCancel(stagingUrl)) {
       cancel("Operation cancelled.");
@@ -56,25 +59,12 @@ export default class ExistingWPStrategy extends BaseStrategy {
     const wpStrategy = new WordPressStrategy();
     await wpStrategy.scaffoldEnvironment(targetDir, ctx);
 
-    const gitignoreContent = `# Core
-vendor
-node_modules
-/wp-admin/
-/wp-includes/
-/wp-*.php
-/xmlrpc.php
-/index.php
-/license.txt
-/readme.html
-/wp-content/uploads/
-wp-config.php
-*.sql
-*.log
-.DS_Store
-`;
-    await fs.writeFile(path.join(targetDir, ".gitignore"), gitignoreContent);
+    await GitService.scaffoldGitignore(targetDir, "wp-existing");
 
-    const sshUserHost = `${ctx.projectName}@popart.cloud`;
+    const suffix = process.env.STAGING_SUFFIX || ".staging";
+
+    const host = process.env.STAGING_SSH_HOST || "staging";
+    const sshUserHost = `${ctx.projectName}@${host}`;
     const remoteDir = `${ctx.projectName}/wordpress`;
     const sshOpt = ctx.sshKeyPath
       ? `-i ${ctx.sshKeyPath.replace(/^~/, process.env.HOME)}`
@@ -175,7 +165,7 @@ docker exec "$DBCONTAINER" mariadb-dump -u"$USER" -p"$PASS" "$NAME" 2>/dev/null
         });
         console.log(
           chalk.gray(
-            `│  Initialized local Git repository and synced remote origin.`,
+            `Initialized local Git repository and synced remote origin.`,
           ),
         );
       } else {
@@ -213,98 +203,23 @@ docker exec "$DBCONTAINER" mariadb-dump -u"$USER" -p"$PASS" "$NAME" 2>/dev/null
         execSync(sedCmd, { cwd: targetDir, stdio: "ignore" });
       }
 
-      if (ctx.environment === "lando") {
-        execSync("lando start", { stdio: "inherit", cwd: targetDir });
-        if (fs.existsSync(path.join(targetDir, "staging.sql"))) {
-          execSync("lando wp db import staging.sql", {
-            stdio: "inherit",
-            cwd: targetDir,
-          });
-          execSync(
-            `lando wp search-replace '${ctx.stagingUrl}' '${localUrl}'`,
-            { stdio: "inherit", cwd: targetDir },
-          );
-          execSync(
-            `lando wp search-replace 'http://${ctx.projectName}.popart.cloud' '${localUrl}'`,
-            { stdio: "inherit", cwd: targetDir },
-          );
-          console.log(
-            chalk.green(
-              `\nDatabase imported and search-replace completed successfully!`,
-            ),
-          );
-        }
-      } else {
-        execSync("docker-compose up -d", { stdio: "inherit", cwd: targetDir });
-        console.log(chalk.yellow(`Waiting for database to be ready...`));
-        const dbReady = () => {
-          try {
-            execSync(
-              `docker-compose exec -T db sh -c '(mariadb -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -e "SELECT 1" "$MYSQL_DATABASE" 2>/dev/null) || (mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" -e "SELECT 1" "$MYSQL_DATABASE" 2>/dev/null)'`,
-              { stdio: "ignore", cwd: targetDir },
-            );
-            return true;
-          } catch {
-            return false;
-          }
-        };
-        let waited = 0;
-        while (!dbReady()) {
-          if (waited >= 60) {
-            console.log(
-              chalk.red(
-                `Database did not become ready after 60s, proceeding anyway...`,
-              ),
-            );
-            break;
-          }
-          execSync("sleep 2");
-          waited += 2;
-          process.stdout.write(
-            chalk.yellow(`\rWaiting for database... ${waited}s`),
-          );
-        }
-        if (waited < 60)
-          console.log(
-            chalk.green(`\rDatabase ready after ${waited}s!          `),
-          );
+      const envService = EnvironmentFactory.getService(ctx.environment);
+      await envService.start(targetDir);
 
-        if (fs.existsSync(path.join(targetDir, "staging.sql"))) {
-          try {
-            execSync(
-              'docker-compose exec -T wordpress bash -c "curl -O https://raw.githubusercontent.com/wp-cli/builds/gh-pages/phar/wp-cli.phar && chmod +x wp-cli.phar && mv wp-cli.phar /usr/local/bin/wp"',
-              { stdio: "ignore", cwd: targetDir },
-            );
-            execSync(`docker-compose cp staging.sql db:/tmp/staging.sql`, {
-              stdio: "inherit",
-              cwd: targetDir,
-            });
-            execSync(
-              `docker-compose exec -T db sh -c '{ echo "[client]"; echo "user=$MYSQL_USER"; echo "password=$MYSQL_PASSWORD"; } > /tmp/my.cnf && (mariadb --defaults-file=/tmp/my.cnf "$MYSQL_DATABASE" < /tmp/staging.sql || mysql --defaults-file=/tmp/my.cnf "$MYSQL_DATABASE" < /tmp/staging.sql) && rm /tmp/my.cnf'`,
-              { stdio: "inherit", cwd: targetDir },
-            );
-            execSync(
-              `docker-compose exec -T -u www-data wordpress wp search-replace '${ctx.stagingUrl}' '${localUrl}'`,
-              { stdio: "inherit", cwd: targetDir },
-            );
-            execSync(
-              `docker-compose exec -T -u www-data wordpress wp search-replace 'http://${ctx.projectName}.popart.cloud' '${localUrl}'`,
-              { stdio: "inherit", cwd: targetDir },
-            );
-            console.log(
-              chalk.green(
-                `\nDatabase imported and search-replace completed successfully!`,
-              ),
-            );
-          } catch (e) {
-            console.log(
-              chalk.red(
-                `\nFailed to run WP-CLI commands inside the docker container.`,
-              ),
-            );
-            console.error("WP-CLI error:", e.message);
-          }
-        }
+      if (fs.existsSync(path.join(targetDir, "staging.sql"))) {
+        await envService.importDb(targetDir, "staging.sql");
+        await envService.searchReplace(targetDir, ctx.stagingUrl, localUrl);
+        await envService.searchReplace(
+          targetDir,
+          `http://${ctx.projectName}${suffix}`,
+          localUrl,
+        );
+
+        console.log(
+          chalk.green(
+            `\nDatabase imported and search-replace completed successfully!`,
+          ),
+        );
       }
     } catch (e) {
       console.log(chalk.red(`\nFailed during environment start or db import.`));

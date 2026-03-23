@@ -38,6 +38,19 @@ npm link
 
 _(Note: If you get an EACCES permission error on Mac or Linux, try `sudo npm link`, though ensuring a Node version manager like NVM is used usually resolves permission issues natively)._
 
+## ⚙️ Configuration
+
+You can customize the CLI behavior for your specific organization by creating a `.env` file in the root of the CLI directory (based on `.env.example`).
+
+### Environment Variables
+
+- `STAGING_SUFFIX`: Default domain suffix for staging environments.
+- `STAGING_SSH_HOST`: SSH host for the staging environment.
+- `KNOWLEDGE_BASE_URL`: The URL for the Knowledge Base registration.
+- `WP_THEME_REPO`: Default GitHub repository URL for the starter theme.
+- `WP_WOO_BRANCH`: Branch name for WooCommerce template.
+- `WP_REACT_BRANCH`: Branch name for React template.
+
 ## 💻 Usage
 
 Once linked, you no longer need to be inside the tool's directory. Navigate to any empty folder where you want to create a new project and type:
@@ -50,16 +63,16 @@ An interactive menu will guide you through:
 
 1. **What is the name of your project?** - Folder and project name (lowercase, numbers, dashes only).
 2. **What are you building?** - Choose the core architecture for your project: Application or WordPress.
-   * **Application**
-     * **Which framework do you want to use?** - Choose between **Next.js** (for modern SSR) or **React** (for a classic SPA).
-     * **Do you want to add Laravel as the backend?** - Choose 'Yes' to scaffold a full-stack environment alongside your frontend.
-   * **WordPress**
-     * **Type of WordPress project:**
-       - **Standard Theme** - Pulls the boilerplate SSH template `git@github.com:popart-studio/popart-tema.git` on the default branch.
+   - **Application**
+     - **Which framework do you want to use?** - Choose between **Next.js** (for modern SSR) or **React** (for a classic SPA).
+     - **Do you want to add Laravel as the backend?** - Choose 'Yes' to scaffold a full-stack environment alongside your frontend.
+   - **WordPress**
+     - **Type of WordPress project:**
+       - **Standard Theme** - Pulls the boilerplate SSH template `git@github.com:starter-theme.git` on the default branch.
        - **WordPress + WooCommerce** - Automatically checks out the `woocommerce` branch of the chosen repository.
-       - **WordPress + React** - Automatically checks out the `react` branch of the chosen repository.  
-     * **Choose MySQL version & WordPress version.**
-     * **Git template URL** - Leave empty for standard boilerplate files, or enter an SSH/HTTPS Git URL.
+       - **WordPress + React** - Automatically checks out the `react` branch of the chosen repository.
+     - **Choose MySQL version & WordPress version.**
+     - **Git template URL** - Leave empty for standard boilerplate files, or enter an SSH/HTTPS Git URL.
 3. **Which local environment do you prefer?** - Generates either a `docker-compose.yaml` or a `.lando.yml` configuration for your chosen setup.
 
 ### And then...

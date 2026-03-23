@@ -1,6 +1,8 @@
 import BaseStrategy from './BaseStrategy.js';
 import fs from 'fs-extra';
 import path from 'path';
+import EnvironmentFactory from '../services/EnvironmentFactory.js';
+import GitService from '../services/GitService.js';
 
 export default class LaravelStrategy extends BaseStrategy {
   constructor(frontendStrategy) {
@@ -47,58 +49,12 @@ export default class LaravelStrategy extends BaseStrategy {
       path.join(targetDir, "README.md"),
       `# ${projectName}\n\nThis is a full-stack Laravel + ${ctx.framework} project.\n\n## Backend\nNavigate to \`backend/\` to view the Laravel app.\n\n## Frontend\nNavigate to \`frontend/\` to view the UI application. It is pre-configured to communicate with the Laravel backend API.\n`
     );
+
+    await GitService.scaffoldGitignore(targetDir, "laravel");
   }
 
   async scaffoldEnvironment(targetDir, ctx) {
-    const { projectName, environment } = ctx;
-
-    if (environment === "docker") {
-      const dockerComposeContent = `version: '3.8'
-services:
-  frontend:
-    image: node:18-alpine
-    working_dir: /app
-    volumes:
-      - ./frontend:/app
-    ports:
-      - "3000:3000"
-    command: npm run dev
-    depends_on:
-      - backend
-
-  backend:
-    image: php:8.2-fpm
-    working_dir: /var/www/html
-    volumes:
-      - ./backend:/var/www/html
-    ports:
-      - "8000:8000"
-    command: php -S 0.0.0.0:8000 -t public
-`;
-      await fs.writeFile(
-        path.join(targetDir, "docker-compose.yaml"),
-        dockerComposeContent
-      );
-    } else if (environment === "lando") {
-      const landoContent = `name: ${projectName}
-recipe: laravel
-config:
-  webroot: backend/public
-  php: '8.2'
-  database: mysql:8.0
-services:
-  frontend:
-    type: node:18
-    overrides:
-      ports:
-        - "3000:3000"
-tooling:
-  npm:
-    service: frontend
-  node:
-    service: frontend
-`;
-      await fs.writeFile(path.join(targetDir, ".lando.yml"), landoContent);
-    }
+    const envService = EnvironmentFactory.getService(ctx.environment);
+    await envService.scaffold(targetDir, "laravel", ctx);
   }
 }
