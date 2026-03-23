@@ -220,6 +220,8 @@ docker exec "$DBCONTAINER" mariadb-dump -u"$USER" -p"$PASS" "$NAME" 2>/dev/null
             `\nDatabase imported and search-replace completed successfully!`,
           ),
         );
+        fs.removeSync(path.join(targetDir, "staging.sql"));
+        console.log(chalk.gray(`\nTemporary staging.sql file removed.`));
       }
     } catch (e) {
       console.log(chalk.red(`\nFailed during environment start or db import.`));
