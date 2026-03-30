@@ -36,6 +36,14 @@ export default class ExistingWPStrategy extends BaseStrategy {
       message:
         "SSH Private Key Path (leave empty to use default system key, e.g., ~/.ssh/key_name):",
       initialValue: "",
+      validate: (value) => {
+        if (value) {
+          const resolvedPath = value.replace(/^~/, process.env.HOME);
+          if (!fs.existsSync(resolvedPath)) {
+            return "SSH key not found.";
+          }
+        }
+      },
     });
     if (isCancel(sshKeyPath)) {
       cancel("Operation cancelled.");
@@ -66,11 +74,12 @@ export default class ExistingWPStrategy extends BaseStrategy {
     const host = process.env.STAGING_SSH_HOST || "staging";
     const sshUserHost = `${ctx.projectName}@${host}`;
     const remoteDir = `${ctx.projectName}/wordpress`;
-    const sshOpt = ctx.sshKeyPath
-      ? `-i ${ctx.sshKeyPath.replace(/^~/, process.env.HOME)}`
+    const resolvedSshKeyPath = ctx.sshKeyPath ? ctx.sshKeyPath.replace(/^~/, process.env.HOME) : "";
+    const sshOpt = resolvedSshKeyPath
+      ? `-i ${resolvedSshKeyPath} -o IdentitiesOnly=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no`
       : "";
-    const rsyncSshOpt = ctx.sshKeyPath
-      ? `-e "ssh -i ${ctx.sshKeyPath.replace(/^~/, process.env.HOME)}"`
+    const rsyncSshOpt = resolvedSshKeyPath
+      ? `-e "ssh -i ${resolvedSshKeyPath} -o IdentitiesOnly=yes"`
       : "";
 
     console.log(

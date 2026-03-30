@@ -42,7 +42,28 @@ export default class WordPressStrategy extends BaseStrategy {
       process.exit(0);
     }
 
-    return { ...ctx, mysqlVersion, wpVersion, themeRepo };
+    let sshKeyPath = "";
+    if (themeRepo) {
+      sshKeyPath = await text({
+        message:
+          "SSH Private Key Path (leave empty to use default system key, e.g., ~/.ssh/key_name):",
+        initialValue: "",
+        validate: (value) => {
+          if (value) {
+            const resolvedPath = value.replace(/^~/, process.env.HOME);
+            if (!fs.existsSync(resolvedPath)) {
+              return "SSH key not found.";
+            }
+          }
+        },
+      });
+      if (isCancel(sshKeyPath)) {
+        cancel("Operation cancelled.");
+        process.exit(0);
+      }
+    }
+
+    return { ...ctx, mysqlVersion, wpVersion, themeRepo, sshKeyPath };
   }
 
   async scaffoldSrc(targetDir, ctx) {
@@ -66,9 +87,16 @@ export default class WordPressStrategy extends BaseStrategy {
         ),
       );
       try {
+        let envVars = { ...process.env };
+        if (ctx.sshKeyPath) {
+          const resolvedKeyPath = ctx.sshKeyPath.replace(/^~/, process.env.HOME);
+          envVars.GIT_SSH_COMMAND = `ssh -i ${resolvedKeyPath} -o IdentitiesOnly=yes`;
+        }
+
         execSync(`git clone ${branchFlag}${themeRepo} .`, {
           stdio: "inherit",
           cwd: themeDir,
+          env: envVars,
         });
         await fs.remove(path.join(themeDir, ".git"));
         console.log(
