@@ -1,8 +1,7 @@
 import BaseStrategy from './BaseStrategy.js';
 import fs from 'fs-extra';
 import path from 'path';
-import EnvironmentFactory from '../services/EnvironmentFactory.js';
-import GitService from '../services/GitService.js';
+import { scaffoldGitignore } from '../utils/git.js';
 
 export default class NextjsStrategy extends BaseStrategy {
   async scaffoldSrc(targetDir, ctx) {
@@ -52,11 +51,10 @@ export default class NextjsStrategy extends BaseStrategy {
     };
     await fs.writeJSON(path.join(targetDir, "package.json"), nextPkg, { spaces: 2 });
 
-    await GitService.scaffoldGitignore(targetDir, "nextjs");
+    await scaffoldGitignore(targetDir, "nextjs");
   }
 
-  async scaffoldEnvironment(targetDir, ctx) {
-    const envService = EnvironmentFactory.getService(ctx.environment);
-    await envService.scaffold(targetDir, "nextjs", ctx);
+  getTemplateType() {
+    return "nextjs";
   }
 }

@@ -5,8 +5,7 @@ import fs from "fs-extra";
 import path from "path";
 import { execSync } from "child_process";
 import WordPressStrategy from "./WordPressStrategy.js";
-import EnvironmentFactory from "../services/EnvironmentFactory.js";
-import GitService from "../services/GitService.js";
+import { scaffoldGitignore } from "../utils/git.js";
 
 export default class ExistingWPStrategy extends BaseStrategy {
   async askQuestions(ctx) {
@@ -64,10 +63,10 @@ export default class ExistingWPStrategy extends BaseStrategy {
   }
 
   async scaffold(targetDir, ctx) {
-    const wpStrategy = new WordPressStrategy();
+    const wpStrategy = new WordPressStrategy(this.envService);
     await wpStrategy.scaffoldEnvironment(targetDir, ctx);
 
-    await GitService.scaffoldGitignore(targetDir, "wp-existing");
+    await scaffoldGitignore(targetDir, "wp-existing");
 
     const suffix = process.env.STAGING_SUFFIX || ".staging";
 
@@ -212,7 +211,7 @@ docker exec "$DBCONTAINER" mariadb-dump -u"$USER" -p"$PASS" "$NAME" 2>/dev/null
         execSync(sedCmd, { cwd: targetDir, stdio: "ignore" });
       }
 
-      const envService = EnvironmentFactory.getService(ctx.environment);
+      const envService = this.envService;
       await envService.start(targetDir);
 
       if (fs.existsSync(path.join(targetDir, "staging.sql"))) {

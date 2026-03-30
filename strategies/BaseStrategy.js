@@ -1,4 +1,8 @@
 export default class BaseStrategy {
+  constructor(envService) {
+    this.envService = envService;
+  }
+
   async askQuestions(ctx) {
     return ctx;
   }
@@ -7,8 +11,14 @@ export default class BaseStrategy {
     throw new Error('scaffoldSrc must be implemented');
   }
 
+  getTemplateType() {
+    throw new Error('getTemplateType must be implemented');
+  }
+
   async scaffoldEnvironment(targetDir, ctx) {
-    throw new Error('scaffoldEnvironment must be implemented');
+    if (this.envService) {
+      await this.envService.scaffold(targetDir, this.getTemplateType(), ctx);
+    }
   }
 
   async scaffold(targetDir, ctx) {

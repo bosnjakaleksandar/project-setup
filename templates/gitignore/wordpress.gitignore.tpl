@@ -9,16 +9,14 @@
 /wp-admin/
 /wp-content/index.php
 /wp-content/languages
-/wp-content/plugins/index.php
-/wp-content/themes/index.php
 /wp-includes/
-vendor
-node_modules
 /index.php
 /license.txt
 /readme.html
 /wp-*.php
 /xmlrpc.php
+vendor
+node_modules
 
 # -------------------------------------- #
 # IDE / EDITOR                           #
@@ -51,6 +49,7 @@ Thumbs.db
 # -------------------------------------- #
 
 /wp-content/themes/twenty*/
+/wp-content/themes/index.php
 
 # -------------------------------------- #
 # Plugins                                #

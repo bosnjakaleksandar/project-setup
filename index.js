@@ -28,7 +28,9 @@ import ReactStrategy from "./strategies/ReactStrategy.js";
 import WordPressStrategy from "./strategies/WordPressStrategy.js";
 import LaravelStrategy from "./strategies/LaravelStrategy.js";
 import ExistingWPStrategy from "./strategies/ExistingWPStrategy.js";
-import { createProjectPost } from "./utils/wpApi.js";
+import LandoService from "./services/LandoService.js";
+import DockerComposeService from "./services/DockerComposeService.js";
+import { registerOnKnowledgeBase } from "./services/KnowledgeBaseService.js";
 
 async function run() {
   console.log("");
@@ -174,19 +176,21 @@ async function run() {
     environment,
   };
 
+  const envService = environment === "lando" ? new LandoService() : new DockerComposeService();
+
   let strategy;
   if (setupType === "existing-wp") {
-    strategy = new ExistingWPStrategy();
+    strategy = new ExistingWPStrategy(envService);
   } else if (appType === "application") {
     const frontendStrategy =
-      framework === "nextjs" ? new NextjsStrategy() : new ReactStrategy();
+      framework === "nextjs" ? new NextjsStrategy(envService) : new ReactStrategy(envService);
     if (useLaravel) {
-      strategy = new LaravelStrategy(frontendStrategy);
+      strategy = new LaravelStrategy(envService, frontendStrategy);
     } else {
       strategy = frontendStrategy;
     }
   } else {
-    strategy = new WordPressStrategy();
+    strategy = new WordPressStrategy(envService);
   }
 
   ctx = await strategy.askQuestions(ctx);
@@ -245,100 +249,7 @@ async function run() {
       }
     }
 
-    const sendToWp = await confirm({
-      message:
-        "Do you want to register this project on the Knowledge Base (Baza Znanja)?",
-      initialValue: true,
-    });
-    if (isCancel(sendToWp)) {
-      cancel("Operation cancelled.");
-      process.exit(0);
-    }
-
-    if (sendToWp) {
-      const repoUrl = await text({
-        message: "What is the Github Repository URL (SSH or HTTP)?",
-        initialValue: ctx.stagingRepoUrl || "",
-      });
-      if (isCancel(repoUrl)) {
-        cancel("Operation cancelled.");
-        process.exit(0);
-      }
-
-      const stagingUrl = await text({
-        message: "What is the Staging URL?",
-        initialValue: `https://${projectName}${process.env.STAGING_SUFFIX || ".staging"}`,
-      });
-      if (isCancel(stagingUrl)) {
-        cancel("Operation cancelled.");
-        process.exit(0);
-      }
-
-      let defaultDevName = "Unknown Developer";
-      try {
-        defaultDevName = execSync("git config user.name").toString().trim();
-      } catch (e) {}
-
-      const developerName = await text({
-        message: "Developer Name:",
-        initialValue: defaultDevName,
-      });
-      if (isCancel(developerName)) {
-        cancel("Operation cancelled.");
-        process.exit(0);
-      }
-
-      const envChoice = await select({
-        message: "Where is the Knowledge Base running?",
-        options: [
-          {
-            label: `Staging (${process.env.KNOWLEDGE_BASE_URL || "https://knowledge-base.staging"})`,
-            value:
-              process.env.KNOWLEDGE_BASE_URL ||
-              "https://knowledge-base.staging",
-          },
-          { label: "Custom URL", value: "custom" },
-        ],
-      });
-      if (isCancel(envChoice)) {
-        cancel("Operation cancelled.");
-        process.exit(0);
-      }
-
-      let wpSiteUrl = envChoice;
-      if (envChoice === "custom") {
-        wpSiteUrl = await text({
-          message: "Enter the Base URL of the Knowledge Base:",
-        });
-        if (isCancel(wpSiteUrl)) {
-          cancel("Operation cancelled.");
-          process.exit(0);
-        }
-      }
-
-      let basicAuthUser = process.env.WP_BASIC_AUTH_USER || "";
-      let basicAuthPass = process.env.WP_BASIC_AUTH_PASS || "";
-
-      const spinnerWp = spinner();
-      spinnerWp.start("Registering project on Knowledge Base...");
-      try {
-        const post = await createProjectPost({
-          wpSiteUrl,
-          developerName,
-          projectName,
-          repoUrl,
-          stagingUrl,
-          basicAuthUser,
-          basicAuthPass,
-        });
-        spinnerWp.stop(chalk.green(`Project registered! Post ID: ${post.id}`));
-      } catch (err) {
-        spinnerWp.stop(
-          chalk.red("Failed to register project on Knowledge Base."),
-        );
-        console.log(chalk.red(`│  ${err.message}`));
-      }
-    }
+    await registerOnKnowledgeBase(ctx);
 
     outro(`Next steps:\n${nextSteps}\n\n${chalk.cyan("Happy coding!")}`);
   } catch (error) {

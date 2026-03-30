@@ -1,12 +1,11 @@
 import BaseStrategy from './BaseStrategy.js';
 import fs from 'fs-extra';
 import path from 'path';
-import EnvironmentFactory from '../services/EnvironmentFactory.js';
-import GitService from '../services/GitService.js';
+import { scaffoldGitignore } from '../utils/git.js';
 
 export default class LaravelStrategy extends BaseStrategy {
-  constructor(frontendStrategy) {
-    super();
+  constructor(envService, frontendStrategy) {
+    super(envService);
     this.frontendStrategy = frontendStrategy;
   }
 
@@ -50,11 +49,10 @@ export default class LaravelStrategy extends BaseStrategy {
       `# ${projectName}\n\nThis is a full-stack Laravel + ${ctx.framework} project.\n\n## Backend\nNavigate to \`backend/\` to view the Laravel app.\n\n## Frontend\nNavigate to \`frontend/\` to view the UI application. It is pre-configured to communicate with the Laravel backend API.\n`
     );
 
-    await GitService.scaffoldGitignore(targetDir, "laravel");
+    await scaffoldGitignore(targetDir, "laravel");
   }
 
-  async scaffoldEnvironment(targetDir, ctx) {
-    const envService = EnvironmentFactory.getService(ctx.environment);
-    await envService.scaffold(targetDir, "laravel", ctx);
+  getTemplateType() {
+    return "laravel";
   }
 }

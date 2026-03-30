@@ -1,8 +1,7 @@
 import BaseStrategy from './BaseStrategy.js';
 import fs from 'fs-extra';
 import path from 'path';
-import EnvironmentFactory from '../services/EnvironmentFactory.js';
-import GitService from '../services/GitService.js';
+import { scaffoldGitignore } from '../utils/git.js';
 
 export default class ReactStrategy extends BaseStrategy {
   async scaffoldSrc(targetDir, ctx) {
@@ -63,11 +62,10 @@ export default class ReactStrategy extends BaseStrategy {
     };
     await fs.writeJSON(path.join(targetDir, "package.json"), reactPkg, { spaces: 2 });
 
-    await GitService.scaffoldGitignore(targetDir, "react");
+    await scaffoldGitignore(targetDir, "react");
   }
 
-  async scaffoldEnvironment(targetDir, ctx) {
-    const envService = EnvironmentFactory.getService(ctx.environment);
-    await envService.scaffold(targetDir, "react", ctx);
+  getTemplateType() {
+    return "react";
   }
 }

@@ -4,8 +4,7 @@ import chalk from "chalk";
 import fs from "fs-extra";
 import path from "path";
 import { execSync } from "child_process";
-import EnvironmentFactory from "../services/EnvironmentFactory.js";
-import GitService from "../services/GitService.js";
+import { scaffoldGitignore } from "../utils/git.js";
 
 export default class WordPressStrategy extends BaseStrategy {
   async askQuestions(ctx) {
@@ -122,11 +121,10 @@ export default class WordPressStrategy extends BaseStrategy {
       );
     }
 
-    await GitService.scaffoldGitignore(targetDir, "wordpress");
+    await scaffoldGitignore(targetDir, "wordpress");
   }
 
-  async scaffoldEnvironment(targetDir, ctx) {
-    const envService = EnvironmentFactory.getService(ctx.environment);
-    await envService.scaffold(targetDir, "wordpress", ctx);
+  getTemplateType() {
+    return "wordpress";
   }
 }
