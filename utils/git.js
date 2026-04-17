@@ -1,20 +1,18 @@
 import fs from "fs-extra";
 import path from "path";
 import { fileURLToPath } from "url";
+import { resolveTemplateName } from "./templateMap.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export async function getGitignore(type) {
-  let templateName = type;
-  if (type === "wp-existing") templateName = "wordpress";
-  if (type === "react" || type === "nextjs") templateName = "app";
-
+  const templateName = resolveTemplateName(type);
   const templatePath = path.join(
     __dirname,
     "..",
     "templates",
     "gitignore",
-    `${templateName}.gitignore.tpl`
+    `${templateName}.gitignore.tpl`,
   );
 
   try {
@@ -22,7 +20,7 @@ export async function getGitignore(type) {
       return await fs.readFile(templatePath, "utf-8");
     }
   } catch (e) {
-    // Fallback or default content if template missing
+    // Fallback to default content if template is missing or unreadable
   }
 
   return `# Default gitignore\nnode_modules/\n*.log\n.DS_Store\n`;

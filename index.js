@@ -1,20 +1,9 @@
 #!/usr/bin/env node
-import {
-  text,
-  select,
-  isCancel,
-  cancel,
-  intro,
-  outro,
-  spinner,
-  confirm,
-} from "@clack/prompts";
+import { intro, outro, spinner, confirm, select, text } from "@clack/prompts";
 import chalk from "chalk";
 import fs from "fs-extra";
 import path from "path";
 import { execSync } from "child_process";
-import figlet from "figlet";
-import gradient from "gradient-string";
 
 import { fileURLToPath } from "url";
 import * as dotenv from "dotenv";
@@ -31,51 +20,42 @@ import ExistingWPStrategy from "./strategies/ExistingWPStrategy.js";
 import LandoService from "./services/LandoService.js";
 import DockerComposeService from "./services/DockerComposeService.js";
 import { registerOnKnowledgeBase } from "./services/KnowledgeBaseService.js";
+import { showBanner } from "./utils/banner.js";
+import { ask } from "./utils/prompts.js";
+
+function resolveStrategy(ctx, envService) {
+  if (ctx.setupType === "existing-wp") {
+    return new ExistingWPStrategy(envService);
+  }
+
+  if (ctx.appType === "application") {
+    const frontendStrategy =
+      ctx.framework === "nextjs"
+        ? new NextjsStrategy(envService)
+        : new ReactStrategy(envService);
+
+    return ctx.useLaravel
+      ? new LaravelStrategy(envService, frontendStrategy)
+      : frontendStrategy;
+  }
+
+  return new WordPressStrategy(envService);
+}
 
 async function run() {
-  console.log("");
-
-  const asciiArt = figlet.textSync("PROJECT SETUP", {
-    font: "Standard",
-  });
-  console.log(gradient(["#ffb800", "#ff6a00"]).multiline(asciiArt));
-
-  const frames = [
-    `  ╭───────╮  Aca:\n  │ ^ ◡ ^ │  Ready to build something awesome?\n  ╰───────╯`,
-    `  ╭───────╮  Aca:\n  │ o ◡ o │  Ready to build something awesome?\n  ╰───────╯`,
-    `  ╭───────╮  Aca:\n  │ - ◡ - │  Ready to build something awesome?\n  ╰───────╯`,
-    `  ╭───────╮  Aca:\n  │ > ◡ < │  Ready to build something awesome?\n  ╰───────╯`,
-  ];
-
-  console.log("");
-  console.log(frames[0]);
-  let i = 1;
-  const interval = setInterval(() => {
-    process.stdout.write("\x1B[3A\x1B[0J");
-    console.log(frames[i % frames.length]);
-    i++;
-  }, 250);
-
-  await new Promise((resolve) => setTimeout(resolve, 2500));
-  clearInterval(interval);
-  process.stdout.write("\x1B[3A\x1B[0J");
-  console.log(frames[0] + "\n");
+  await showBanner();
 
   intro(chalk.bgCyan(chalk.black(" 🚀 CLI START ")));
 
-  const setupType = await select({
+  const setupType = await ask(select, {
     message: "What would you like to do?",
     options: [
       { label: "Create a new project", value: "new" },
       { label: "Set up an existing WP project", value: "existing-wp" },
     ],
   });
-  if (isCancel(setupType)) {
-    cancel("Operation cancelled.");
-    process.exit(0);
-  }
 
-  const projectName = await text({
+  const projectName = await ask(text, {
     message: "What is the name of your project?",
     initialValue: "project-name",
     validate: (value) => {
@@ -85,10 +65,6 @@ async function run() {
       return;
     },
   });
-  if (isCancel(projectName)) {
-    cancel("Operation cancelled.");
-    process.exit(0);
-  }
 
   let appType = null;
   let framework = null;
@@ -97,43 +73,31 @@ async function run() {
   let projectType = null;
 
   if (setupType === "new") {
-    appType = await select({
+    appType = await ask(select, {
       message: "Are you building an Application or a WordPress project?",
       options: [
         { label: "Application", value: "application" },
         { label: "WordPress", value: "wordpress" },
       ],
     });
-    if (isCancel(appType)) {
-      cancel("Operation cancelled.");
-      process.exit(0);
-    }
 
     if (appType === "application") {
-      framework = await select({
+      framework = await ask(select, {
         message: "Which frontend framework do you want to use?",
         options: [
           { label: "React", value: "react" },
           { label: "Next.js", value: "nextjs" },
         ],
       });
-      if (isCancel(framework)) {
-        cancel("Operation cancelled.");
-        process.exit(0);
-      }
 
-      useLaravel = await confirm({
+      useLaravel = await ask(confirm, {
         message: "Do you want to add Laravel as a backend?",
         initialValue: false,
       });
-      if (isCancel(useLaravel)) {
-        cancel("Operation cancelled.");
-        process.exit(0);
-      }
 
       projectType = framework;
     } else {
-      wpType = await select({
+      wpType = await ask(select, {
         message: "Which WordPress project setup do you need?",
         options: [
           { label: "Standard Theme", value: "wp-theme" },
@@ -141,10 +105,6 @@ async function run() {
           { label: "WordPress + React", value: "wp-react" },
         ],
       });
-      if (isCancel(wpType)) {
-        cancel("Operation cancelled.");
-        process.exit(0);
-      }
 
       projectType = wpType;
     }
@@ -153,17 +113,13 @@ async function run() {
     projectType = "wp-existing";
   }
 
-  const environment = await select({
+  const environment = await ask(select, {
     message: "Which local environment do you prefer?",
     options: [
       { label: "Docker (docker-compose.yaml)", value: "docker" },
       { label: "Lando (.lando.yml)", value: "lando" },
     ],
   });
-  if (isCancel(environment)) {
-    cancel("Operation cancelled.");
-    process.exit(0);
-  }
 
   let ctx = {
     setupType,
@@ -176,22 +132,9 @@ async function run() {
     environment,
   };
 
-  const envService = environment === "lando" ? new LandoService() : new DockerComposeService();
-
-  let strategy;
-  if (setupType === "existing-wp") {
-    strategy = new ExistingWPStrategy(envService);
-  } else if (appType === "application") {
-    const frontendStrategy =
-      framework === "nextjs" ? new NextjsStrategy(envService) : new ReactStrategy(envService);
-    if (useLaravel) {
-      strategy = new LaravelStrategy(envService, frontendStrategy);
-    } else {
-      strategy = frontendStrategy;
-    }
-  } else {
-    strategy = new WordPressStrategy(envService);
-  }
+  const envService =
+    environment === "lando" ? new LandoService() : new DockerComposeService();
+  const strategy = resolveStrategy(ctx, envService);
 
   ctx = await strategy.askQuestions(ctx);
 
@@ -203,7 +146,7 @@ async function run() {
   try {
     if (await fs.pathExists(targetDir)) {
       s.stop("Directory exists!");
-      cancel(
+      console.log(
         chalk.red(
           `Directory "${projectName}" already exists! Please choose a different name.`,
         ),
@@ -212,32 +155,72 @@ async function run() {
     }
 
     await fs.ensureDir(targetDir);
-
     await strategy.scaffold(targetDir, ctx);
 
     s.stop(`Project ${chalk.green(projectName)} successfully created!`);
 
     let nextSteps = `  cd ${projectName}\n`;
-    if (environment === "docker") {
-      nextSteps += `  docker-compose up -d\n`;
+
+    if (setupType === "existing-wp") {
+      nextSteps += `  ${chalk.gray(`# ${environment === "docker" ? "Docker" : "Lando"} environment is already running`)}\n`;
+      
+      const themeDir = path.join(targetDir, "wp-content", "themes", projectName);
+      const hasPkg = await fs.pathExists(path.join(themeDir, "package.json"));
+      const hasComposer = await fs.pathExists(path.join(themeDir, "composer.json"));
+      
+      if (hasPkg || hasComposer) {
+        nextSteps += `  cd wp-content/themes/${projectName}\n`;
+        if (hasComposer) nextSteps += `  composer install\n`;
+        if (hasPkg) {
+          nextSteps += `  npm install\n`;
+          nextSteps += `  npm run dev\n`;
+        }
+      }
+    } else if (appType === "wordpress") {
+      if (environment === "docker") {
+        nextSteps += `  docker-compose up -d\n`;
+      } else {
+        nextSteps += `  lando start\n`;
+      }
+
+      const themeDir = path.join(targetDir, "wp-content", "themes", projectName);
+      const hasPkg = await fs.pathExists(path.join(themeDir, "package.json"));
+      const hasComposer = await fs.pathExists(path.join(themeDir, "composer.json"));
+
+      if (hasPkg || hasComposer) {
+        nextSteps += `  cd wp-content/themes/${projectName}\n`;
+        if (hasComposer) nextSteps += `  composer install\n`;
+        if (hasPkg) {
+          nextSteps += `  npm install\n`;
+          nextSteps += `  npm run dev\n`;
+        }
+      } else if (ctx.themeRepo) {
+        nextSteps += `  cd wp-content/themes/${projectName}\n`;
+        nextSteps += `  npm install && npm run dev ${chalk.gray("(if required)")}\n`;
+      }
     } else {
-      nextSteps += `  lando start\n`;
+      if (environment === "docker") {
+        nextSteps += `  docker-compose up -d\n`;
+      } else {
+        nextSteps += `  lando start\n`;
+      }
+
+      if (projectType === "nextjs" || projectType === "react") {
+        if (ctx.useLaravel) {
+          nextSteps += `  cd frontend\n`;
+        }
+        nextSteps += `  npm install\n`;
+        nextSteps += `  npm run dev\n`;
+      }
     }
 
-    if (projectType === "nextjs" || projectType === "react") {
-      nextSteps += `  npm install\n`;
-      nextSteps += `  npm run dev`;
-    }
+    nextSteps = nextSteps.replace(/\n$/, "");
 
     if (!ctx.skipGitInit) {
-      const doGitInit = await confirm({
+      const doGitInit = await ask(confirm, {
         message: "Do you want to initialize a new Git repository?",
         initialValue: true,
       });
-      if (isCancel(doGitInit)) {
-        cancel("Operation cancelled.");
-        process.exit(0);
-      }
 
       if (doGitInit) {
         try {
@@ -253,9 +236,7 @@ async function run() {
 
     outro(`Next steps:\n${nextSteps}\n\n${chalk.cyan("Happy coding!")}`);
   } catch (error) {
-    if (typeof s !== "undefined" && typeof s.stop === "function")
-      s.stop(chalk.red("An error occurred."));
-    cancel("Setup failed.");
+    s.stop(chalk.red("An error occurred."));
     console.error(error);
     process.exit(1);
   }

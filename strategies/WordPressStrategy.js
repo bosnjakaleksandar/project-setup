@@ -1,65 +1,39 @@
 import BaseStrategy from "./BaseStrategy.js";
-import { text, select, isCancel, cancel } from "@clack/prompts";
+import { select } from "@clack/prompts";
 import chalk from "chalk";
 import fs from "fs-extra";
 import path from "path";
 import { execSync } from "child_process";
 import { scaffoldGitignore } from "../utils/git.js";
+import {
+  ask,
+  askMysqlVersion,
+  askWpVersion,
+  askSshKeyPath,
+} from "../utils/prompts.js";
 
 export default class WordPressStrategy extends BaseStrategy {
   async askQuestions(ctx) {
-    const mysqlVersion = await select({
-      message: "Choose MySQL version:",
-      options: [
-        { label: "8.0 (Recommended)", value: "8.0" },
-        { label: "5.7", value: "5.7" },
-        { label: "MariaDB 11.4", value: "mariadb:11.4" },
-      ],
-    });
-    if (isCancel(mysqlVersion)) {
-      cancel("Operation cancelled.");
-      process.exit(0);
-    }
+    const mysqlVersion = await askMysqlVersion();
+    const wpVersion = await askWpVersion();
 
-    const wpVersion = await text({
-      message: 'WordPress version (latest or specify version like "6.9.4"):',
-      initialValue: "latest",
-    });
-    if (isCancel(wpVersion)) {
-      cancel("Operation cancelled.");
-      process.exit(0);
-    }
-
-    const themeRepo = await text({
+    const themeRepo = await ask(select, {
       message:
         "Git template URL to clone as the theme (defaults to starter theme from env):",
-      initialValue:
-        process.env.WP_THEME_REPO || "git@github.com:starter-theme.git",
+      options: [
+        {
+          label:
+            process.env.WP_THEME_REPO || "git@github.com:starter-theme.git",
+          value:
+            process.env.WP_THEME_REPO || "git@github.com:starter-theme.git",
+        },
+        { label: "No template (scaffold minimal theme files)", value: "" },
+      ],
     });
-    if (isCancel(themeRepo)) {
-      cancel("Operation cancelled.");
-      process.exit(0);
-    }
 
     let sshKeyPath = "";
     if (themeRepo) {
-      sshKeyPath = await text({
-        message:
-          "SSH Private Key Path (leave empty to use default system key, e.g., ~/.ssh/key_name):",
-        initialValue: "",
-        validate: (value) => {
-          if (value) {
-            const resolvedPath = value.replace(/^~/, process.env.HOME);
-            if (!fs.existsSync(resolvedPath)) {
-              return "SSH key not found.";
-            }
-          }
-        },
-      });
-      if (isCancel(sshKeyPath)) {
-        cancel("Operation cancelled.");
-        process.exit(0);
-      }
+      sshKeyPath = await askSshKeyPath();
     }
 
     return { ...ctx, mysqlVersion, wpVersion, themeRepo, sshKeyPath };
@@ -88,7 +62,10 @@ export default class WordPressStrategy extends BaseStrategy {
       try {
         let envVars = { ...process.env };
         if (ctx.sshKeyPath) {
-          const resolvedKeyPath = ctx.sshKeyPath.replace(/^~/, process.env.HOME);
+          const resolvedKeyPath = ctx.sshKeyPath.replace(
+            /^~/,
+            process.env.HOME,
+          );
           envVars.GIT_SSH_COMMAND = `ssh -i ${resolvedKeyPath} -o IdentitiesOnly=yes`;
         }
 
@@ -102,7 +79,10 @@ export default class WordPressStrategy extends BaseStrategy {
           chalk.green(`Removed .git tracking from the cloned starter theme.`),
         );
       } catch (e) {
-        console.log(chalk.red(`\nFailed to clone repo.`));
+        await fs.remove(themeDir);
+        throw new Error(
+          `Failed to clone theme repository: ${themeRepo}\n${e.message}`,
+        );
       }
     } else {
       await fs.writeFile(

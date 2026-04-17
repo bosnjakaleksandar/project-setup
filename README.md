@@ -116,4 +116,16 @@ All that's left is to enter the newly generated folder:
 cd <your-project-name>
 ```
 
-And start your containers using `docker-compose up -d` or `lando start`.
+For **new projects**, you will need to start your containers manually:
+
+```bash
+docker-compose up -d
+```
+
+or
+
+```bash
+lando start
+```
+
+*(Note: For **existing projects**, the environment is started automatically during the setup process!)*

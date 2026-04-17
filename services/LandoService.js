@@ -3,15 +3,14 @@ import fs from "fs-extra";
 import path from "path";
 import { execSync } from "child_process";
 import { fileURLToPath } from "url";
+import { resolveTemplateName, resolveDbImage } from "../utils/templateMap.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default class LandoService extends EnvironmentService {
   async scaffold(targetDir, type, options) {
     const { projectName, mysqlVersion } = options;
-    let templateName = type;
-    if (type === "wp-existing") templateName = "wordpress";
-    if (type === "react" || type === "nextjs") templateName = "app";
+    const templateName = resolveTemplateName(type);
 
     const templatePath = path.join(
       __dirname,
@@ -23,10 +22,7 @@ export default class LandoService extends EnvironmentService {
     let content = await fs.readFile(templatePath, "utf-8");
 
     if (mysqlVersion) {
-      const dbImage = mysqlVersion.includes("mariadb")
-        ? mysqlVersion
-        : `mysql:${mysqlVersion}`;
-      content = content.replace(/{{DB_IMAGE}}/g, dbImage);
+      content = content.replace(/{{DB_IMAGE}}/g, resolveDbImage(mysqlVersion));
     }
 
     content = content.replace(/{{PROJECT_NAME}}/g, projectName);
