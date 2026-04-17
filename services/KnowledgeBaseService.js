@@ -1,76 +1,55 @@
-import { text, select, isCancel, cancel, confirm, spinner } from "@clack/prompts";
+import { text, select, confirm, spinner } from "@clack/prompts";
 import chalk from "chalk";
 import { execSync } from "child_process";
 import { createProjectPost } from "../utils/wpApi.js";
+import { ask } from "../utils/prompts.js";
 
 export async function registerOnKnowledgeBase(ctx) {
-  const sendToWp = await confirm({
-    message: "Do you want to register this project on the Knowledge Base (Baza Znanja)?",
+  const sendToWp = await ask(confirm, {
+    message:
+      "Do you want to register this project on the Knowledge Base (Baza Znanja)?",
     initialValue: true,
   });
-  if (isCancel(sendToWp)) {
-    cancel("Operation cancelled.");
-    process.exit(0);
-  }
 
   if (!sendToWp) return;
 
-  const repoUrl = await text({
+  const repoUrl = await ask(text, {
     message: "What is the Github Repository URL (SSH or HTTP)?",
     initialValue: ctx.stagingRepoUrl || "",
   });
-  if (isCancel(repoUrl)) {
-    cancel("Operation cancelled.");
-    process.exit(0);
-  }
 
-  const stagingUrl = await text({
+  const stagingUrl = await ask(text, {
     message: "What is the Staging URL?",
     initialValue: `https://${ctx.projectName}${process.env.STAGING_SUFFIX || ".staging"}`,
   });
-  if (isCancel(stagingUrl)) {
-    cancel("Operation cancelled.");
-    process.exit(0);
-  }
 
   let defaultDevName = "Unknown Developer";
   try {
     defaultDevName = execSync("git config user.name").toString().trim();
   } catch (e) {}
 
-  const developerName = await text({
+  const developerName = await ask(text, {
     message: "Developer Name:",
     initialValue: defaultDevName,
   });
-  if (isCancel(developerName)) {
-    cancel("Operation cancelled.");
-    process.exit(0);
-  }
 
-  const envChoice = await select({
+  const envChoice = await ask(select, {
     message: "Where is the Knowledge Base running?",
     options: [
       {
         label: `Staging (${process.env.KNOWLEDGE_BASE_URL || "https://knowledge-base.staging"})`,
-        value: process.env.KNOWLEDGE_BASE_URL || "https://knowledge-base.staging",
+        value:
+          process.env.KNOWLEDGE_BASE_URL || "https://knowledge-base.staging",
       },
       { label: "Custom URL", value: "custom" },
     ],
   });
-  if (isCancel(envChoice)) {
-    cancel("Operation cancelled.");
-    process.exit(0);
-  }
 
   let wpSiteUrl = envChoice;
   if (envChoice === "custom") {
-    wpSiteUrl = await text({
+    wpSiteUrl = await ask(text, {
       message: "Enter the Base URL of the Knowledge Base:",
     });
-    if (isCancel(wpSiteUrl)) {
-      cancel("Operation cancelled.");
-      process.exit(0);
-    }
   }
 
   let basicAuthUser = process.env.WP_BASIC_AUTH_USER || "";

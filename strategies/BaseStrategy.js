@@ -8,11 +8,11 @@ export default class BaseStrategy {
   }
 
   async scaffoldSrc(targetDir, ctx) {
-    throw new Error('scaffoldSrc must be implemented');
+    throw new Error("scaffoldSrc must be implemented");
   }
 
   getTemplateType() {
-    throw new Error('getTemplateType must be implemented');
+    throw new Error("getTemplateType must be implemented");
   }
 
   async scaffoldEnvironment(targetDir, ctx) {
@@ -22,7 +22,7 @@ export default class BaseStrategy {
   }
 
   async scaffold(targetDir, ctx) {
-    await this.scaffoldSrc(targetDir, ctx);
     await this.scaffoldEnvironment(targetDir, ctx);
+    await this.scaffoldSrc(targetDir, ctx);
   }
 }

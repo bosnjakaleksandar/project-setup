@@ -1,117 +1,86 @@
 import BaseStrategy from "./BaseStrategy.js";
-import { text, select, isCancel, cancel } from "@clack/prompts";
+import { text } from "@clack/prompts";
 import chalk from "chalk";
 import fs from "fs-extra";
 import path from "path";
 import { execSync } from "child_process";
-import WordPressStrategy from "./WordPressStrategy.js";
 import { scaffoldGitignore } from "../utils/git.js";
+import {
+  ask,
+  askMysqlVersion,
+  askWpVersion,
+  askSshKeyPath,
+} from "../utils/prompts.js";
 
 export default class ExistingWPStrategy extends BaseStrategy {
   async askQuestions(ctx) {
-    const mysqlVersion = await select({
-      message: "Choose MySQL version:",
-      options: [
-        { label: "8.0 (Recommended)", value: "8.0" },
-        { label: "5.7", value: "5.7" },
-        { label: "MariaDB 11.4", value: "mariadb:11.4" },
-      ],
-    });
-    if (isCancel(mysqlVersion)) {
-      cancel("Operation cancelled.");
-      process.exit(0);
-    }
-
-    const wpVersion = await text({
-      message: 'WordPress version (latest or specify version like "6.9.4"):',
-      initialValue: "latest",
-    });
-    if (isCancel(wpVersion)) {
-      cancel("Operation cancelled.");
-      process.exit(0);
-    }
-
-    const sshKeyPath = await text({
-      message:
-        "SSH Private Key Path (leave empty to use default system key, e.g., ~/.ssh/key_name):",
-      initialValue: "",
-      validate: (value) => {
-        if (value) {
-          const resolvedPath = value.replace(/^~/, process.env.HOME);
-          if (!fs.existsSync(resolvedPath)) {
-            return "SSH key not found.";
-          }
-        }
-      },
-    });
-    if (isCancel(sshKeyPath)) {
-      cancel("Operation cancelled.");
-      process.exit(0);
-    }
+    const mysqlVersion = await askMysqlVersion();
+    const wpVersion = await askWpVersion();
+    const sshKeyPath = await askSshKeyPath();
 
     const suffix = process.env.STAGING_SUFFIX || ".staging";
-    const stagingUrl = await text({
+    const stagingUrl = await ask(text, {
       message: "What is the Staging URL for search-replace?",
       initialValue: `https://${ctx.projectName}${suffix}`,
     });
-    if (isCancel(stagingUrl)) {
-      cancel("Operation cancelled.");
-      process.exit(0);
-    }
 
     return { ...ctx, mysqlVersion, wpVersion, stagingUrl, sshKeyPath };
   }
 
-  async scaffold(targetDir, ctx) {
-    const wpStrategy = new WordPressStrategy(this.envService);
-    await wpStrategy.scaffoldEnvironment(targetDir, ctx);
+  #resolveSshOptions(ctx) {
+    const host = process.env.STAGING_SSH_HOST;
+    if (!host) {
+      throw new Error(
+        "STAGING_SSH_HOST is not set in .env. Cannot connect to staging server.",
+      );
+    }
 
-    await scaffoldGitignore(targetDir, "wp-existing");
-
-    const suffix = process.env.STAGING_SUFFIX || ".staging";
-
-    const host = process.env.STAGING_SSH_HOST || "staging";
     const sshUserHost = `${ctx.projectName}@${host}`;
     const remoteDir = `${ctx.projectName}/wordpress`;
-    const resolvedSshKeyPath = ctx.sshKeyPath ? ctx.sshKeyPath.replace(/^~/, process.env.HOME) : "";
-    const sshOpt = resolvedSshKeyPath
-      ? `-i ${resolvedSshKeyPath} -o IdentitiesOnly=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no`
+    const resolvedKeyPath = ctx.sshKeyPath
+      ? ctx.sshKeyPath.replace(/^~/, process.env.HOME)
       : "";
-    const rsyncSshOpt = resolvedSshKeyPath
-      ? `-e "ssh -i ${resolvedSshKeyPath} -o IdentitiesOnly=yes"`
+    const sshOpt = resolvedKeyPath
+      ? `-i ${resolvedKeyPath} -o IdentitiesOnly=yes -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no`
+      : "";
+    const rsyncSshOpt = resolvedKeyPath
+      ? `-e "ssh -i ${resolvedKeyPath} -o IdentitiesOnly=yes"`
       : "";
 
+    return { sshUserHost, remoteDir, sshOpt, rsyncSshOpt };
+  }
+
+  async #pullRemoteFiles(targetDir, ctx, ssh) {
     console.log(
       chalk.cyan(
-        `\n\nPulling uploads, plugins, and themes from ${sshUserHost}...`,
+        `\n\nPulling uploads, plugins, and themes from ${ssh.sshUserHost}...`,
       ),
     );
-    try {
-      await fs.ensureDir(path.join(targetDir, "wp-content", "uploads"));
-      await fs.ensureDir(path.join(targetDir, "wp-content", "plugins"));
-      await fs.ensureDir(path.join(targetDir, "wp-content", "themes"));
 
-      execSync(
-        `rsync -avz --exclude='*.log' --exclude='node_modules' ${rsyncSshOpt} ${sshUserHost}:${remoteDir}/wp-content/uploads/ wp-content/uploads/`,
-        { stdio: "inherit", cwd: targetDir },
-      );
-      execSync(
-        `rsync -avz --exclude='*.log' --exclude='node_modules' ${rsyncSshOpt} ${sshUserHost}:${remoteDir}/wp-content/plugins/ wp-content/plugins/`,
-        { stdio: "inherit", cwd: targetDir },
-      );
-      execSync(
-        `rsync -avz --exclude='*.log' --exclude='node_modules' ${rsyncSshOpt} ${sshUserHost}:${remoteDir}/wp-content/themes/ wp-content/themes/`,
-        { stdio: "inherit", cwd: targetDir },
-      );
+    const wpContentDirs = ["uploads", "plugins", "themes"];
+    for (const dir of wpContentDirs) {
+      await fs.ensureDir(path.join(targetDir, "wp-content", dir));
+    }
+
+    try {
+      for (const dir of wpContentDirs) {
+        execSync(
+          `rsync -avz --exclude='*.log' --exclude='node_modules' ${ssh.rsyncSshOpt} ${ssh.sshUserHost}:${ssh.remoteDir}/wp-content/${dir}/ wp-content/${dir}/`,
+          { stdio: "inherit", cwd: targetDir },
+        );
+      }
     } catch (e) {
       console.log(
         chalk.red(`\nFailed to pull some files via rsync.\nContinuing...`),
       );
     }
+  }
 
+  async #exportDatabase(targetDir, ctx, ssh) {
     console.log(
       chalk.cyan(`\nExporting and downloading database from staging...`),
     );
+
     try {
       const dumpCommand = `
 cd ${ctx.projectName} || exit 1
@@ -128,7 +97,7 @@ docker exec "$DBCONTAINER" mariadb-dump -u"$USER" -p"$PASS" "$NAME" 2>/dev/null
       const encoded = Buffer.from(dumpCommand).toString("base64");
 
       const result = execSync(
-        `ssh ${sshOpt} ${sshUserHost} "echo ${encoded} | base64 -d | bash"`,
+        `ssh ${ssh.sshOpt} ${ssh.sshUserHost} "echo ${encoded} | base64 -d | bash"`,
         { cwd: targetDir, maxBuffer: 1024 * 1024 * 512 },
       );
 
@@ -147,15 +116,18 @@ docker exec "$DBCONTAINER" mariadb-dump -u"$USER" -p"$PASS" "$NAME" 2>/dev/null
       console.error("DB dump error:", e.message);
       console.error("stderr:", e.stderr?.toString());
     }
+  }
 
+  async #linkGitRepository(targetDir, ctx, ssh) {
     console.log(
       chalk.cyan(
         `\nChecking staging environment for Git repository linkage...`,
       ),
     );
+
     try {
       const gitRemoteUrl = execSync(
-        `ssh ${sshOpt} ${sshUserHost} "cd ${ctx.projectName} && (git config --get remote.origin.url || git -C wordpress config --get remote.origin.url || git -C wordpress/wp-content/themes/${ctx.projectName} config --get remote.origin.url)"`,
+        `ssh ${ssh.sshOpt} ${ssh.sshUserHost} "cd ${ctx.projectName} && (git config --get remote.origin.url || git -C wordpress config --get remote.origin.url || git -C wordpress/wp-content/themes/${ctx.projectName} config --get remote.origin.url)"`,
         { encoding: "utf8", stdio: ["pipe", "pipe", "ignore"] },
       ).trim();
 
@@ -182,9 +154,12 @@ docker exec "$DBCONTAINER" mariadb-dump -u"$USER" -p"$PASS" "$NAME" 2>/dev/null
         );
       }
     } catch (e) {
-      // Fail silently if there is simply no .git directory detected
+      console.log(chalk.gray(`No Git repository detected on staging.`));
     }
+  }
 
+  async #importAndReplace(targetDir, ctx) {
+    const suffix = process.env.STAGING_SUFFIX || ".staging";
     const localUrl =
       ctx.environment === "lando"
         ? `https://${ctx.projectName}.lndo.site`
@@ -193,6 +168,7 @@ docker exec "$DBCONTAINER" mariadb-dump -u"$USER" -p"$PASS" "$NAME" 2>/dev/null
     console.log(
       chalk.cyan(`\nStarting local environment and importing database...`),
     );
+
     try {
       if (fs.existsSync(path.join(targetDir, "staging.sql"))) {
         console.log(
@@ -202,7 +178,7 @@ docker exec "$DBCONTAINER" mariadb-dump -u"$USER" -p"$PASS" "$NAME" 2>/dev/null
         );
         const sedCmd = [
           `LC_ALL=C sed`,
-          `-e '1s|/\*M!999999\\- enable the sandbox mode \*/||'`,
+          `-e '1s|/\\*M!999999\\\\- enable the sandbox mode \\*/||'`,
           `-e 's/utf8mb3_uca1400_ai_ci/utf8_general_ci/g'`,
           `-e 's/utf8mb4_uca1400_ai_ci/utf8mb4_unicode_520_ci/g'`,
           `-e 's/utf8mb3_/utf8_/g'`,
@@ -211,13 +187,16 @@ docker exec "$DBCONTAINER" mariadb-dump -u"$USER" -p"$PASS" "$NAME" 2>/dev/null
         execSync(sedCmd, { cwd: targetDir, stdio: "ignore" });
       }
 
-      const envService = this.envService;
-      await envService.start(targetDir);
+      await this.envService.start(targetDir);
 
       if (fs.existsSync(path.join(targetDir, "staging.sql"))) {
-        await envService.importDb(targetDir, "staging.sql");
-        await envService.searchReplace(targetDir, ctx.stagingUrl, localUrl);
-        await envService.searchReplace(
+        await this.envService.importDb(targetDir, "staging.sql");
+        await this.envService.searchReplace(
+          targetDir,
+          ctx.stagingUrl,
+          localUrl,
+        );
+        await this.envService.searchReplace(
           targetDir,
           `http://${ctx.projectName}${suffix}`,
           localUrl,
@@ -235,5 +214,19 @@ docker exec "$DBCONTAINER" mariadb-dump -u"$USER" -p"$PASS" "$NAME" 2>/dev/null
       console.log(chalk.red(`\nFailed during environment start or db import.`));
       console.error("Error:", e.message);
     }
+  }
+
+  async scaffoldSrc(targetDir, ctx) {
+    const ssh = this.#resolveSshOptions(ctx);
+
+    await scaffoldGitignore(targetDir, "wp-existing");
+    await this.#pullRemoteFiles(targetDir, ctx, ssh);
+    await this.#exportDatabase(targetDir, ctx, ssh);
+    await this.#linkGitRepository(targetDir, ctx, ssh);
+    await this.#importAndReplace(targetDir, ctx);
+  }
+
+  getTemplateType() {
+    return "wordpress";
   }
 }
