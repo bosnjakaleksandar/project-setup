@@ -118,6 +118,28 @@ docker exec "$DBCONTAINER" mariadb-dump -u"$USER" -p"$PASS" "$NAME" 2>/dev/null
     }
   }
 
+  #detectTablePrefix(targetDir) {
+    try {
+      const grepOut = execSync(
+        "grep -m 1 -oE '\\`[a-zA-Z0-9_]+postmeta\\`' staging.sql || true",
+        { cwd: targetDir, encoding: "utf8" },
+      ).trim();
+      const match = grepOut.match(/`([a-zA-Z0-9_]+)postmeta`/);
+      if (match && match[1]) {
+        console.log(
+          chalk.green(`\nDetected WordPress table prefix: ${match[1]}`),
+        );
+        return match[1];
+      }
+    } catch (e) {}
+    console.log(
+      chalk.yellow(
+        `\nCould not detect WordPress table prefix, defaulting to wp_`,
+      ),
+    );
+    return "wp_";
+  }
+
   async #linkGitRepository(targetDir, ctx, ssh) {
     console.log(
       chalk.cyan(
@@ -126,28 +148,96 @@ docker exec "$DBCONTAINER" mariadb-dump -u"$USER" -p"$PASS" "$NAME" 2>/dev/null
     );
 
     try {
-      const gitRemoteUrl = execSync(
-        `ssh ${ssh.sshOpt} ${ssh.sshUserHost} "cd ${ctx.projectName} && (git config --get remote.origin.url || git -C wordpress config --get remote.origin.url || git -C wordpress/wp-content/themes/${ctx.projectName} config --get remote.origin.url)"`,
+      const findGitCmd = `
+cd ${ctx.projectName} || exit 1
+for d in . wordpress wordpress/wp-content/themes/${ctx.projectName}; do
+  if [ -d "$d/.git" ]; then
+    url=$(git -C "$d" config --get remote.origin.url 2>/dev/null)
+    if [ -n "$url" ]; then
+      echo "$d|$url"
+      exit 0
+    fi
+  fi
+done
+exit 1
+`.trim();
+
+      const encoded = Buffer.from(findGitCmd).toString("base64");
+
+      const gitInfo = execSync(
+        `ssh ${ssh.sshOpt} ${ssh.sshUserHost} "echo ${encoded} | base64 -d | bash"`,
         { encoding: "utf8", stdio: ["pipe", "pipe", "ignore"] },
       ).trim();
 
-      if (gitRemoteUrl) {
+      if (gitInfo) {
+        const [remotePath, gitRemoteUrl] = gitInfo.split("|");
+        let localGitDir = targetDir;
+        if (remotePath.startsWith("wordpress/")) {
+          localGitDir = path.join(
+            targetDir,
+            remotePath.slice("wordpress/".length),
+          );
+        }
+
         console.log(
-          chalk.green(`Found mapping to staging Git origin: ${gitRemoteUrl}`),
+          chalk.green(
+            `Found mapping to staging Git origin in ${remotePath === "." ? "root" : remotePath}: ${gitRemoteUrl}`,
+          ),
         );
         ctx.stagingRepoUrl = gitRemoteUrl;
         ctx.skipGitInit = true;
 
-        execSync(`git init`, { cwd: targetDir, stdio: "ignore" });
+        const resolvedKeyPath = ctx.sshKeyPath
+          ? ctx.sshKeyPath.replace(/^~/, process.env.HOME)
+          : "";
+        const gitEnv = resolvedKeyPath
+          ? {
+              ...process.env,
+              GIT_SSH_COMMAND: `ssh -i ${resolvedKeyPath} -o IdentitiesOnly=yes -o StrictHostKeyChecking=no`,
+            }
+          : process.env;
+
+        fs.ensureDirSync(localGitDir);
+        execSync(`git init`, { cwd: localGitDir, stdio: "ignore" });
         execSync(`git remote add origin ${gitRemoteUrl}`, {
-          cwd: targetDir,
+          cwd: localGitDir,
           stdio: "ignore",
         });
-        console.log(
-          chalk.gray(
-            `Initialized local Git repository and synced remote origin.`,
-          ),
-        );
+
+        console.log(chalk.cyan(`Syncing local Git index with remote...`));
+        try {
+          execSync(`git fetch origin`, {
+            cwd: localGitDir,
+            stdio: ["pipe", "pipe", "pipe"],
+            env: gitEnv,
+          });
+          execSync(`git remote set-head origin -a`, {
+            cwd: localGitDir,
+            stdio: ["pipe", "pipe", "pipe"],
+            env: gitEnv,
+          });
+          const defaultBranch =
+            execSync(
+              `git symbolic-ref --short refs/remotes/origin/HEAD | sed 's@^origin/@@'`,
+              { cwd: localGitDir, encoding: "utf8" },
+            ).trim() || "main";
+          execSync(`git reset --mixed origin/${defaultBranch}`, {
+            cwd: localGitDir,
+            stdio: "ignore",
+          });
+          console.log(
+            chalk.gray(
+              `Initialized local Git repository and synced to origin/${defaultBranch}.`,
+            ),
+          );
+        } catch (syncErr) {
+          console.log(
+            chalk.yellow(
+              `Could not automatically sync HEAD: ${syncErr.message}`,
+            ),
+          );
+          console.error(chalk.gray(`stderr: ${syncErr.stderr?.toString()}`));
+        }
       } else {
         console.log(
           chalk.yellow(`No Git remote origin found in staging environment.`),
@@ -216,12 +306,17 @@ docker exec "$DBCONTAINER" mariadb-dump -u"$USER" -p"$PASS" "$NAME" 2>/dev/null
     }
   }
 
-  async scaffoldSrc(targetDir, ctx) {
+  async scaffold(targetDir, ctx) {
     const ssh = this.#resolveSshOptions(ctx);
 
     await scaffoldGitignore(targetDir, "wp-existing");
     await this.#pullRemoteFiles(targetDir, ctx, ssh);
     await this.#exportDatabase(targetDir, ctx, ssh);
+
+    ctx.tablePrefix = this.#detectTablePrefix(targetDir);
+
+    await this.scaffoldEnvironment(targetDir, ctx);
+
     await this.#linkGitRepository(targetDir, ctx, ssh);
     await this.#importAndReplace(targetDir, ctx);
   }

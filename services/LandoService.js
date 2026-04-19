@@ -9,7 +9,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default class LandoService extends EnvironmentService {
   async scaffold(targetDir, type, options) {
-    const { projectName, mysqlVersion } = options;
+    const { projectName, mysqlVersion, tablePrefix } = options;
     const templateName = resolveTemplateName(type);
 
     const templatePath = path.join(
@@ -24,6 +24,9 @@ export default class LandoService extends EnvironmentService {
     if (mysqlVersion) {
       content = content.replace(/{{DB_IMAGE}}/g, resolveDbImage(mysqlVersion));
     }
+
+    const tablePrefixValue = tablePrefix || "wp_";
+    content = content.replace(/{{TABLE_PREFIX}}/g, tablePrefixValue);
 
     content = content.replace(/{{PROJECT_NAME}}/g, projectName);
 

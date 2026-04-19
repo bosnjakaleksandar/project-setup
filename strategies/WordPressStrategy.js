@@ -39,7 +39,11 @@ export default class WordPressStrategy extends BaseStrategy {
     return { ...ctx, mysqlVersion, wpVersion, themeRepo, sshKeyPath };
   }
 
-  async scaffoldSrc(targetDir, ctx) {
+  async scaffold(targetDir, ctx) {
+    if (!ctx.skipEnvironment) {
+      await this.scaffoldEnvironment(targetDir, ctx);
+    }
+
     const { projectName, projectType, themeRepo } = ctx;
     const themeDir = path.join(targetDir, "wp-content", "themes", projectName);
     await fs.ensureDir(themeDir);
