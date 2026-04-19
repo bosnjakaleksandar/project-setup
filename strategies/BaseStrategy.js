@@ -7,8 +7,8 @@ export default class BaseStrategy {
     return ctx;
   }
 
-  async scaffoldSrc(targetDir, ctx) {
-    throw new Error("scaffoldSrc must be implemented");
+  async scaffold(targetDir, ctx) {
+    throw new Error("scaffold must be implemented by the strategy subclass");
   }
 
   getTemplateType() {
@@ -19,10 +19,5 @@ export default class BaseStrategy {
     if (this.envService) {
       await this.envService.scaffold(targetDir, this.getTemplateType(), ctx);
     }
-  }
-
-  async scaffold(targetDir, ctx) {
-    await this.scaffoldEnvironment(targetDir, ctx);
-    await this.scaffoldSrc(targetDir, ctx);
   }
 }

@@ -24,6 +24,7 @@ services:
       WORDPRESS_DB_USER: wp_user
       WORDPRESS_DB_PASSWORD: wp_password
       WORDPRESS_DB_NAME: wordpress
+      WORDPRESS_TABLE_PREFIX: {{TABLE_PREFIX}}
 
   phpmyadmin:
     image: phpmyadmin:latest

@@ -10,7 +10,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export default class DockerComposeService extends EnvironmentService {
   async scaffold(targetDir, type, options) {
-    const { projectName, mysqlVersion, wpVersion } = options;
+    const { projectName, mysqlVersion, wpVersion, tablePrefix } = options;
     const templateName = resolveTemplateName(type);
 
     const templatePath = path.join(
@@ -30,6 +30,9 @@ export default class DockerComposeService extends EnvironmentService {
       const wpImageTag = wpVersion === "latest" ? "latest" : wpVersion;
       content = content.replace(/{{WP_VERSION}}/g, wpImageTag);
     }
+
+    const tablePrefixValue = tablePrefix || "wp_";
+    content = content.replace(/{{TABLE_PREFIX}}/g, tablePrefixValue);
 
     content = content.replace(/{{PROJECT_NAME}}/g, projectName);
 
@@ -64,7 +67,6 @@ export default class DockerComposeService extends EnvironmentService {
         );
         break;
       }
-      // Use async sleep instead of blocking execSync("sleep 2")
       await new Promise((resolve) => setTimeout(resolve, 2000));
       waited += 2;
       process.stdout.write(

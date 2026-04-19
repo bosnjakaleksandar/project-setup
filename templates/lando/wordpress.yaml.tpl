@@ -14,7 +14,7 @@ services:
         DB_PASSWORD: user
         DB_NAME: wordpress
         DB_HOST: database
-        TABLE_PREFIX: wp_
+        TABLE_PREFIX: {{TABLE_PREFIX}}
     ports:
       - 5173:5173
     build_as_root:
@@ -22,7 +22,7 @@ services:
       - apt-get install -y nodejs
     run:
       - if [ ! -d "wp-content" ] || [ ! -d "wp-includes" ] || [ ! -d "wp-admin" ]; then wp core download; fi
-      - if [ ! -f "wp-config.php" ]; then wp config create --dbname="wordpress" --dbuser="user" --dbpass="user" --dbhost="database" --dbprefix="wp_"; fi
+      - if [ ! -f "wp-config.php" ]; then wp config create --dbname="wordpress" --dbuser="user" --dbpass="user" --dbhost="database" --dbprefix="{{TABLE_PREFIX}}"; fi
   database:
     creds:
       user: user
